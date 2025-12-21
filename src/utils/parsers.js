@@ -1,4 +1,4 @@
-import { DEFAULT_TAGS, DEFAULT_ENUMS, DEFAULT_GROUPS } from '../constants/fixData';
+import { DEFAULT_TAGS, DEFAULT_ENUMS } from '../constants/fixData';
 
 export const parseQuickFixXml = (xmlString) => {
   const parser = new DOMParser();
@@ -6,18 +6,26 @@ export const parseQuickFixXml = (xmlString) => {
   
   const newTags = { ...DEFAULT_TAGS };
   const newEnums = { ...DEFAULT_ENUMS };
-  const newGroups = { ...DEFAULT_GROUPS };
+  const newGroups = {}; 
 
-  // 1. Extract Field Definitions
-  const fieldDefs = xmlDoc.getElementsByTagName("field");
+  console.log("DEBUG: Starting XML Parse...");
+
+  // 1. Build Name Map (Initialize with Defaults to ensure standard tags are resolved)
   const nameToNum = {};
+  Object.entries(DEFAULT_TAGS).forEach(([tag, name]) => {
+    nameToNum[name] = parseInt(tag);
+  });
+
+  // Extract Field Definitions from XML
+  const fieldDefs = xmlDoc.getElementsByTagName("field");
   
   for (let i = 0; i < fieldDefs.length; i++) {
     const field = fieldDefs[i];
-    const number = parseInt(field.getAttribute("number"));
+    const numberStr = field.getAttribute("number");
     const name = field.getAttribute("name");
     
-    if (number && name) {
+    if (numberStr && name) {
+      const number = parseInt(numberStr);
       newTags[number] = name;
       nameToNum[name] = number;
       
@@ -31,27 +39,68 @@ export const parseQuickFixXml = (xmlString) => {
     }
   }
 
-  // 2. Extract Groups
+  // 2. Index Components (Reusable blocks)
+  const componentMap = {};
+  const componentsRoot = xmlDoc.getElementsByTagName("components")[0];
+  if (componentsRoot) {
+    for (let i = 0; i < componentsRoot.children.length; i++) {
+        const compNode = componentsRoot.children[i];
+        if (compNode.tagName === 'component') {
+            componentMap[compNode.getAttribute("name")] = compNode;
+        }
+    }
+  }
+  console.log("DEBUG: Components Indexed:", Object.keys(componentMap));
+
+  // Helper: Recursively flatten a node's children into a list of Field IDs
+  const resolveFields = (node, visited) => {
+    let fields = [];
+    const currentVisited = new Set(visited);
+    
+    if (currentVisited.has(node)) return fields;
+    currentVisited.add(node);
+
+    for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        const tagName = child.tagName;
+        const name = child.getAttribute("name");
+
+        if (tagName === 'field' || tagName === 'group') {
+            const num = parseInt(child.getAttribute("number")) || nameToNum[name];
+            if (num) {
+                fields.push(num);
+            } else {
+                console.warn(`DEBUG: Could not resolve Tag ID for field '${name}' inside ${node.getAttribute('name') || 'unknown'}`);
+            }
+        } else if (tagName === 'component') {
+            const refName = child.getAttribute("name");
+            const compDef = componentMap[refName];
+            if (compDef) {
+                console.log(`DEBUG: Expanding component '${refName}' inside ${node.getAttribute('name') || 'parent'}`);
+                fields = fields.concat(resolveFields(compDef, currentVisited));
+            } else {
+                console.warn(`DEBUG: Component reference '${refName}' not found in dictionary.`);
+            }
+        }
+    }
+    return fields;
+  };
+
+  // 3. Extract Groups (from Messages and Components)
   const groupNodes = xmlDoc.getElementsByTagName("group");
   for (let i=0; i<groupNodes.length; i++) {
      const gNode = groupNodes[i];
      const name = gNode.getAttribute("name");
-     const number = nameToNum[name];
+     const number = parseInt(gNode.getAttribute("number")) || nameToNum[name];
      
      if (number) {
-        const childTags = [];
-        let delimiter = null;
-        for (let j=0; j<gNode.children.length; j++) {
-           const child = gNode.children[j];
-           const childName = child.getAttribute("name");
-           const childNum = nameToNum[childName];
-           if (childNum) {
-              childTags.push(childNum);
-              if (delimiter === null) delimiter = childNum;
-           }
-        }
+        const childTags = resolveFields(gNode, new Set());
+        
         if (childTags.length > 0) {
-           newGroups[number] = { delimiter: delimiter, fields: childTags };
+           newGroups[number] = { delimiter: childTags[0], fields: childTags };
+           console.log(`DEBUG: Group ${number} (${name}) loaded. Fields: [${childTags.join(', ')}]`);
+        } else {
+           console.warn(`DEBUG: Group ${number} (${name}) has no resolved fields.`);
         }
      }
   }
@@ -62,7 +111,6 @@ export const parseQuickFixXml = (xmlString) => {
 export const parseFixMessage = (raw) => {
   if (!raw || !raw.trim()) return [];
   let pairs = [];
-  // Handle ^A caret notation
   const clean = raw.replace(/\|/g, '\u0001').replace(/\^A/g, '\u0001');
   
   // Heuristic 1: Bracketed
@@ -77,10 +125,10 @@ export const parseFixMessage = (raw) => {
 
   // Heuristic 2: Columnar
   const lines = raw.split(/\r?\n/);
-  const isColumnar = lines.some(l => /^[A-Za-z]+\s+\d+\s+/.test(l.trim()));
+  const isColumnar = lines.some(l => /^[A-Za-z0-9_]+\s+\d+\s+/.test(l.trim()));
   if (isColumnar) {
     lines.forEach(line => {
-      const match = line.trim().match(/^\w+\s+(\d+)\s+(.*)$/);
+      const match = line.trim().match(/^[\w\d\s&.]+\s+(\d+)\s+(.*)$/);
       if (match) {
         pairs.push({ tag: parseInt(match[1]), value: match[2].trim() });
       }
@@ -115,6 +163,38 @@ export const parseFixMessage = (raw) => {
   return pairs;
 };
 
+// --- Recursive Grouping Logic ---
+
+const skipGroup = (startIndex, pairs, groupDef, allGroups) => {
+  let i = startIndex;
+  const countTagPair = pairs[i - 1]; 
+  const count = parseInt(countTagPair.value) || 0;
+  
+  const groupFieldsSet = new Set(groupDef.fields);
+  let processedInstances = 0;
+
+  while (i < pairs.length && processedInstances < count) {
+    if (pairs[i].tag !== groupDef.delimiter) break; 
+    i++; 
+
+    while (i < pairs.length) {
+      const tag = pairs[i].tag;
+      if (tag === groupDef.delimiter) break;
+
+      if (groupFieldsSet.has(tag)) {
+        i++; 
+        if (allGroups[tag]) {
+           i = skipGroup(i, pairs, allGroups[tag], allGroups);
+        }
+      } else {
+        break;
+      }
+    }
+    processedInstances++;
+  }
+  return i;
+};
+
 export const groupify = (pairs, groupDefs) => {
   const result = [];
   let i = 0;
@@ -124,7 +204,9 @@ export const groupify = (pairs, groupDefs) => {
     const def = groupDefs[p.tag];
 
     if (def) {
-      const count = parseInt(p.value);
+      const count = parseInt(p.value) || 0;
+      console.log(`DEBUG: Processing Group ${p.tag}. Expecting ${count} instances.`);
+      
       const groupNode = { 
         tag: p.tag, 
         value: p.value, 
@@ -137,9 +219,14 @@ export const groupify = (pairs, groupDefs) => {
       const groupFieldsSet = new Set(def.fields);
       let safetyCount = 0;
       
-      while (i < pairs.length && safetyCount < (count || 999)) {
+      while (i < pairs.length && safetyCount < count) {
         const instancePairs = [];
-        if (pairs[i].tag !== def.delimiter) break; 
+        
+        // STRICT: First tag must be delimiter
+        if (pairs[i].tag !== def.delimiter) {
+            console.log(`DEBUG: Group ${p.tag} instance ${safetyCount + 1} break: Next tag ${pairs[i].tag} is not delimiter ${def.delimiter}`);
+            break; 
+        }
 
         instancePairs.push(pairs[i]);
         i++;
@@ -151,7 +238,19 @@ export const groupify = (pairs, groupDefs) => {
           if (groupFieldsSet.has(nextTag)) {
              instancePairs.push(pairs[i]);
              i++;
+             
+             if (groupDefs[nextTag]) {
+                // Log that we found a nested group definition
+                console.log(`DEBUG: Found nested group start ${nextTag} inside ${p.tag}`);
+                const subGroupDef = groupDefs[nextTag];
+                const endIndex = skipGroup(i, pairs, subGroupDef, groupDefs);
+                while (i < endIndex) {
+                   instancePairs.push(pairs[i]);
+                   i++;
+                }
+             }
           } else {
+             console.log(`DEBUG: Group ${p.tag} break: Tag ${nextTag} not in definition. Instance ended.`);
              break;
           }
         }
@@ -159,10 +258,6 @@ export const groupify = (pairs, groupDefs) => {
         const processedInstance = groupify(instancePairs, groupDefs);
         groupNode.instances.push(processedInstance);
         safetyCount++;
-        
-        if (i < pairs.length && pairs[i].tag !== def.delimiter && !groupFieldsSet.has(pairs[i].tag)) {
-            break;
-        }
       }
       result.push(groupNode);
     } else {

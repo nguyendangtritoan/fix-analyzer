@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { ArrowRightLeft, Play, Trash2, Upload, CheckCircle, X } from 'lucide-react';
-import { DEFAULT_TAGS, DEFAULT_ENUMS, DEFAULT_GROUPS } from './constants/fixData';
+import { DEFAULT_TAGS, DEFAULT_ENUMS } from './constants/fixData';
 import { parseFixMessage, parseQuickFixXml } from './utils/parsers';
 import CopyDropdown from './components/features/CopyDropdown';
 import SingleView from './components/features/SingleView';
@@ -13,7 +13,7 @@ export default function App() {
   
   const [tags, setTags] = useState(DEFAULT_TAGS);
   const [enums, setEnums] = useState(DEFAULT_ENUMS);
-  const [groups, setGroups] = useState(DEFAULT_GROUPS);
+  const [groups, setGroups] = useState({}); // Default to empty
   const [dictFileName, setDictFileName] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -26,6 +26,7 @@ export default function App() {
   }, [input2.length]);
 
   const loadExample = () => {
+    // Example with Repeating Groups (NoPartyIDs=453)
     setInput1("8=FIX.4.4^A9=196^A35=X^A262=req1^A268=2^A277=1^A48=EURUSD^A22=4^A269=0^A270=1.12^A271=1000000^A277=1^A48=EURUSD^A22=4^A269=1^A270=1.13^A271=1000000^A453=2^A448=BANKA^A447=D^A452=1^A802=1^A523=TraderA^A803=1^A448=CLIENTB^A447=D^A452=3^A10=188^A");
     setInput2("8=FIX.4.4^A9=196^A35=X^A262=req1^A268=2^A277=1^A48=EURUSD^A22=4^A269=0^A270=1.12^A271=1000000^A277=1^A48=EURUSD^A22=4^A269=1^A270=1.13^A271=1000000^A453=2^A448=BANKA^A447=D^A452=1^A802=1^A523=TraderA^A803=1^A448=CLIENTCHANGED^A447=D^A452=3^A10=199^A");
     setMode("diff");
@@ -45,7 +46,7 @@ export default function App() {
         setGroups(newGroups);
         setDictFileName(file.name);
       } catch (err) {
-        alert("Failed to parse XML dictionary.");
+        alert("Failed to parse XML dictionary. Ensure it follows standard QuickFIX format.");
         console.error(err);
       }
     };
@@ -55,7 +56,7 @@ export default function App() {
   const clearDictionary = () => {
     setTags(DEFAULT_TAGS);
     setEnums(DEFAULT_ENUMS);
-    setGroups(DEFAULT_GROUPS);
+    setGroups({});
     setDictFileName(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -175,7 +176,12 @@ export default function App() {
           </div>
 
           {mode === 'single' ? (
-            <SingleView data={parsed1} tags={tags} enums={enums} groups={groups} />
+            <SingleView 
+              data={parsed1} 
+              tags={tags} 
+              enums={enums} 
+              groups={groups}
+            />
           ) : (
             <DiffView data1={parsed1} data2={parsed2} tags={tags} enums={enums} groups={groups} />
           )}
