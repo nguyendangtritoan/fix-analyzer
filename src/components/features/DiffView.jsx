@@ -13,50 +13,78 @@ const DiffView = ({ data1, data2, tags, enums, groups }) => {
   const flat1 = useMemo(() => flattenForDiff(tree1), [tree1]);
   const flat2 = useMemo(() => flattenForDiff(tree2), [tree2]);
 
-  // 3. Align keys
+  // 3. Align keys using Lookahead Heuristic
   const map1 = useMemo(() => flat1.reduce((acc, item) => ({ ...acc, [item.key]: item }), {}), [flat1]);
   const map2 = useMemo(() => flat2.reduce((acc, item) => ({ ...acc, [item.key]: item }), {}), [flat2]);
   
   const unifiedList = useMemo(() => {
     const list = [];
     let i = 0, j = 0;
+    const len1 = flat1.length;
+    const len2 = flat2.length;
     
-    while(i < flat1.length || j < flat2.length) {
-       const k1 = flat1[i] ? flat1[i].key : null;
-       const k2 = flat2[j] ? flat2[j].key : null;
+    while(i < len1 || j < len2) {
+       const k1 = i < len1 ? flat1[i].key : null;
+       const k2 = j < len2 ? flat2[j].key : null;
        
        if (k1 === k2) {
+          // Perfect match
           list.push(k1);
           i++; j++;
        } else {
-          // Lookahead checks to see if the current item exists in the other list
-          const k1ExistsIn2 = k1 && map2[k1];
-          const k2ExistsIn1 = k2 && map1[k2];
+          // Mismatch: We need to decide whether to advance I, J, or both.
+          // Strategy: Look ahead to see which key allows us to re-sync sooner.
+          
+          // Find k1's next occurrence in list 2
+          let k1_in_2 = -1;
+          if (k1) {
+             for(let x = j; x < len2; x++) {
+                if (flat2[x].key === k1) { k1_in_2 = x; break; }
+             }
+          }
+          
+          // Find k2's next occurrence in list 1
+          let k2_in_1 = -1;
+          if (k2) {
+             for(let y = i; y < len1; y++) {
+                if (flat1[y].key === k2) { k2_in_1 = y; break; }
+             }
+          }
 
-          if (k2 && !k2ExistsIn1) {
-             // k2 is unique to Message 2 (INSERTION). Consuming k2.
-             list.push(k2);
-             j++;
-          } else if (k1 && !k1ExistsIn2) {
-             // k1 is unique to Message 1 (DELETION). Consuming k1.
+          if (k1_in_2 === -1 && k2_in_1 === -1) {
+             // Neither exists in the other list (Both are unique/modified).
+             // Consuming k1 first (arbitrary choice, but consistent).
+             if (k1) { list.push(k1); i++; }
+             else if (k2) { list.push(k2); j++; }
+          } else if (k1_in_2 === -1) {
+             // k1 is unique to List 1 (Deletion)
              list.push(k1);
              i++;
+          } else if (k2_in_1 === -1) {
+             // k2 is unique to List 2 (Insertion)
+             list.push(k2);
+             j++;
           } else {
-             // Both exist elsewhere (CROSSING/REORDER). 
-             // Default to pushing k1 to maintain Left-side structure, 
-             // or handle as complex swap. Pushing k1 moves us forward.
-             if (k1) {
-               list.push(k1);
-               i++;
+             // Both exist later. Which is closer?
+             const dist1 = k1_in_2 - j; // Cost to skip in List 2 to find k1
+             const dist2 = k2_in_1 - i; // Cost to skip in List 1 to find k2
+             
+             if (dist1 < dist2) {
+                // k1 is closer in List 2. This implies k2 is an insertion in List 2.
+                // Consume k2 to catch up.
+                list.push(k2);
+                j++;
              } else {
-               list.push(k2);
-               j++;
+                // k2 is closer in List 1. This implies k1 is a deletion in List 1.
+                // Consume k1 to catch up.
+                list.push(k1);
+                i++;
              }
           }
        }
     }
     return list;
-  }, [flat1, flat2, map1, map2]);
+  }, [flat1, flat2]);
 
   return (
     <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white">
@@ -70,7 +98,9 @@ const DiffView = ({ data1, data2, tags, enums, groups }) => {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {unifiedList.map((key) => {
+          {unifiedList.map((key, idx) => {
+             // Fallback for duplicates in unifiedList (shouldn't happen with new logic, but safe for React keys)
+             const uniqueKey = `${key}_${idx}`;
              const item1 = map1[key];
              const item2 = map2[key];
              const tag = item1?.tag || item2?.tag;
@@ -90,7 +120,7 @@ const DiffView = ({ data1, data2, tags, enums, groups }) => {
              const padding = { paddingLeft: `${depth * 20 + 16}px` };
 
              return (
-               <tr key={key} className={rowClass}>
+               <tr key={uniqueKey} className={rowClass}>
                  <td className="px-4 py-2 align-top" style={padding}>
                     <TagBadge tag={tag} />
                  </td>
