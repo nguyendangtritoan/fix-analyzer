@@ -14,26 +14,49 @@ const DiffView = ({ data1, data2, tags, enums, groups }) => {
   const flat2 = useMemo(() => flattenForDiff(tree2), [tree2]);
 
   // 3. Align keys
-  const map1 = flat1.reduce((acc, item) => ({ ...acc, [item.key]: item }), {});
-  const map2 = flat2.reduce((acc, item) => ({ ...acc, [item.key]: item }), {});
+  const map1 = useMemo(() => flat1.reduce((acc, item) => ({ ...acc, [item.key]: item }), {}), [flat1]);
+  const map2 = useMemo(() => flat2.reduce((acc, item) => ({ ...acc, [item.key]: item }), {}), [flat2]);
   
-  const unifiedList = [];
-  let i = 0, j = 0;
-  while(i < flat1.length || j < flat2.length) {
-     const k1 = flat1[i] ? flat1[i].key : null;
-     const k2 = flat2[j] ? flat2[j].key : null;
-     
-     if (k1 === k2) {
-        unifiedList.push(k1);
-        i++; j++;
-     } else if (k1 && (!k2 || !map1[k2])) {
-        unifiedList.push(k1);
-        i++;
-     } else {
-        unifiedList.push(k2);
-        j++;
-     }
-  }
+  const unifiedList = useMemo(() => {
+    const list = [];
+    let i = 0, j = 0;
+    
+    while(i < flat1.length || j < flat2.length) {
+       const k1 = flat1[i] ? flat1[i].key : null;
+       const k2 = flat2[j] ? flat2[j].key : null;
+       
+       if (k1 === k2) {
+          list.push(k1);
+          i++; j++;
+       } else {
+          // Lookahead checks to see if the current item exists in the other list
+          const k1ExistsIn2 = k1 && map2[k1];
+          const k2ExistsIn1 = k2 && map1[k2];
+
+          if (k2 && !k2ExistsIn1) {
+             // k2 is unique to Message 2 (INSERTION). Consuming k2.
+             list.push(k2);
+             j++;
+          } else if (k1 && !k1ExistsIn2) {
+             // k1 is unique to Message 1 (DELETION). Consuming k1.
+             list.push(k1);
+             i++;
+          } else {
+             // Both exist elsewhere (CROSSING/REORDER). 
+             // Default to pushing k1 to maintain Left-side structure, 
+             // or handle as complex swap. Pushing k1 moves us forward.
+             if (k1) {
+               list.push(k1);
+               i++;
+             } else {
+               list.push(k2);
+               j++;
+             }
+          }
+       }
+    }
+    return list;
+  }, [flat1, flat2, map1, map2]);
 
   return (
     <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white">
