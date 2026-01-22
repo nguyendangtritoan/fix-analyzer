@@ -121,7 +121,7 @@ export default function App() {
           <div>
             <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
               <ArrowRightLeft className="text-blue-600" />
-              Fix Analyser Turbo (FAT)
+              FIX Analysis & Review Tool
             </h1>
             <p className="text-slate-500 mt-1">Multi-format parser & visual diff tool</p>
           </div>
