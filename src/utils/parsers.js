@@ -196,9 +196,10 @@ export const parseQuickFixXml = (xmlString) => {
 export const parseFixMessage = (raw) => {
   if (!raw || !raw.trim()) return [];
   let pairs = [];
+  const soh = String.fromCharCode(1);
   
   // Normalize Delimiters (SOH, Pipe, Caret)
-  const clean = raw.replace(/\|/g, '\u0001').replace(/\^A/g, '\u0001');
+  const clean = raw.replace(/\|/g, soh).replace(/\^A/g, soh);
   
   // Heuristic 1: Bracketed Logs <35> MsgType = D
   if (/<(\d+)>[^=]*=\s*(.*)/.test(raw)) {
@@ -225,8 +226,9 @@ export const parseFixMessage = (raw) => {
   }
 
   // Heuristic 3: Standard Delimited
-  if (!clean.includes('\u0001') && clean.includes('=')) {
-     const spaceMatches = clean.match(/(\d+)=([^=\s\u0001]+)/g);
+  if (!clean.includes(soh) && clean.includes('=')) {
+     const fieldRegex = new RegExp(`(\\d+)=([^=\\s${soh}]+)`, 'g');
+     const spaceMatches = clean.match(fieldRegex);
      if (spaceMatches) {
         spaceMatches.forEach(m => {
             const [k, v] = m.split('=');
@@ -236,7 +238,7 @@ export const parseFixMessage = (raw) => {
      }
   }
 
-  const tokens = clean.split('\u0001');
+  const tokens = clean.split(soh);
   tokens.forEach(t => {
     if (t.includes('=')) {
       const parts = t.split('=');

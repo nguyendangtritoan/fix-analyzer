@@ -42,9 +42,10 @@ export const generateOutput = (data, format, tags) => {
         const tagName = tags[p.tag] || String(p.tag);
         return `${tagName.padEnd(30, ' ')}${String(p.tag).padEnd(8, ' ')}${p.value}`;
       }).join('\n');
-    case 'json':
+    case 'json': {
       const simpleObj = data.reduce((acc, p) => ({ ...acc, [p.tag]: p.value }), {});
       return JSON.stringify(simpleObj, null, 2);
+    }
     default:
       return "";
   }
