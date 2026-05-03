@@ -258,6 +258,48 @@ export const parseFixMessage = (raw) => {
 // Recursive Group Processor
 // ---------------------------------------------------------
 
+const inferRepeatedGroupFields = (pairs, startIndex, groupDef, count) => {
+  if (count <= 1 || pairs[startIndex]?.tag !== groupDef.delimiter) return new Set();
+
+  const groupFieldsSet = new Set(groupDef.fields);
+  const delimiterIndexes = [];
+
+  for (let i = startIndex; i < pairs.length && delimiterIndexes.length < count; i++) {
+    if (pairs[i].tag === groupDef.delimiter) {
+      delimiterIndexes.push(i);
+    }
+  }
+
+  if (delimiterIndexes.length < 2) return new Set();
+
+  const appearances = new Map();
+  const candidateOrder = [];
+  const windowCount = delimiterIndexes.length - 1;
+
+  for (let windowIndex = 0; windowIndex < windowCount; windowIndex++) {
+    const seenInWindow = new Set();
+    const windowStart = delimiterIndexes[windowIndex] + 1;
+    const windowEnd = delimiterIndexes[windowIndex + 1];
+
+    for (let i = windowStart; i < windowEnd; i++) {
+      const tag = pairs[i].tag;
+      if (groupFieldsSet.has(tag)) continue;
+
+      if (!appearances.has(tag)) {
+        appearances.set(tag, 0);
+        candidateOrder.push(tag);
+      }
+      seenInWindow.add(tag);
+    }
+
+    seenInWindow.forEach(tag => {
+      appearances.set(tag, appearances.get(tag) + 1);
+    });
+  }
+
+  return new Set(candidateOrder.filter(tag => appearances.get(tag) === windowCount));
+};
+
 /**
  * Advances the index past a group (and its nested subgroups) linearly.
  * Used to "jump" over nested structures so the parent loop can continue safely.
@@ -266,8 +308,9 @@ const skipGroup = (startIndex, pairs, groupDef, allGroups) => {
   let i = startIndex;
   const countTagPair = pairs[i - 1]; 
   const count = parseInt(countTagPair.value) || 0;
-  
-  const groupFieldsSet = new Set(groupDef.fields);
+
+  const inferredFields = inferRepeatedGroupFields(pairs, startIndex, groupDef, count);
+  const groupFieldsSet = new Set([...groupDef.fields, ...inferredFields]);
   let processedInstances = 0;
 
   while (i < pairs.length && processedInstances < count) {
@@ -332,8 +375,9 @@ export const groupify = (pairs, groupDefs) => {
       };
       
       i++; // Move past count tag
-      
-      const groupFieldsSet = new Set(def.fields);
+
+      const inferredFields = inferRepeatedGroupFields(pairs, i, def, count);
+      const groupFieldsSet = new Set([...def.fields, ...inferredFields]);
       let safetyCount = 0;
       
       while (i < pairs.length && safetyCount < count) {

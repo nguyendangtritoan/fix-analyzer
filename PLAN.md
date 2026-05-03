@@ -1,5 +1,24 @@
 # Feature Plans
 
+## Repeated Unknown Group Field Inference Plan
+
+### Goal
+Detect custom or dictionary-missing fields as group members when they repeat with the same cadence as the surrounding repeating-group instances.
+
+### Implementation Steps
+- [x] Add a per-group inference pass that scans repeated delimiter windows for unknown tags.
+- [x] Treat unknown tags as group fields when they appear in every observed inter-instance window for that group occurrence.
+- [x] Apply the inferred fields in both `groupify` and nested-group `skipGroup` traversal.
+- [x] Validate with the provided `35=R` sample so `7152` stays inside `NoAllocs` and `2893` stays inside `NoLegs`.
+- [x] Update `PROJECT_KNOWLEDGE.md` with the new grouping behavior.
+- [x] Run lint/build verification.
+
+### Validation
+- [x] Targeted local parser harness confirms `78` instances include `7152`.
+- [x] Targeted local parser harness confirms all four `555` leg instances include `2893`.
+- [x] Run `npm run lint`.
+- [x] Run `npm run build`.
+
 ## Multi-Message Comparison Plan
 
 ### Goal

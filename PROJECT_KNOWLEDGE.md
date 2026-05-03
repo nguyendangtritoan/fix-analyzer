@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-05-02
+Last Updated: 2026-05-03
 
 ## Project Purpose
 `fix-analyzer` is a client-side React app for parsing and comparing FIX messages from inconsistent log formats.
@@ -67,6 +67,7 @@ Primary outcomes:
 - Chooses schema by `MsgType` (`tag 35`) when available; falls back to `_global`.
 - Converts flat pairs into tree nodes for repeating groups.
 - Handles nested groups by recursively skipping and then re-processing subgroup token ranges.
+- Infers dictionary-missing fields as group members when an unknown tag repeats in every observed inter-instance window for a group occurrence. This supports custom tags that are omitted from the active dictionary but repeat with the group cadence.
 
 `flattenForDiff(nodes)` behavior:
 - Flattens grouped tree to path-based keys for alignment across messages.
@@ -102,7 +103,7 @@ Deployment:
 - Push to `master` triggers GitHub Pages workflow.
 - Build artifact is `dist/`.
 
-## Current Baseline (2026-05-02)
+## Current Baseline (2026-05-03)
 Build status:
 - `npm run build` passes.
 
@@ -119,6 +120,12 @@ Testing:
 - Diff alignment is key-path-based; complex reorder scenarios in repeating groups may still produce noisy diffs, especially across more than two messages.
 
 ## Change Log
+### 2026-05-03 - Infer Repeated Unknown Group Fields
+- Files: `PLAN.md`, `src/utils/parsers.js`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added a per-group inference pass so repeated dictionary-missing tags can remain inside repeating-group instances.
+- Behavior Impact: Custom tags such as `2893` in `NoLegs` and `7152` in `NoAllocs` are grouped when they repeat alongside the group instances, instead of breaking the group at the first unknown tag.
+- Verification: Targeted local parser harness confirmed `78` instances include `7152` and all four `555` leg instances include `2893`; `npm run lint` passed; `npm run build` passed; Vite dev server was still running with HMR and `curl -I http://127.0.0.1:5173/fix-analyzer/` returned `200 OK`.
+
 ### 2026-05-02 - Conditional Message Input Grid
 - Files: `src/App.jsx`, `PROJECT_KNOWLEDGE.md`
 - Summary: Made the message input grid use the original two-column layout while only two message slots exist, switching to the expanded multi-column layout only after users add more slots.
