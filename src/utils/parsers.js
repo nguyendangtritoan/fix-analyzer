@@ -300,6 +300,56 @@ const inferRepeatedGroupFields = (pairs, startIndex, groupDef, count) => {
   return new Set(candidateOrder.filter(tag => appearances.get(tag) === windowCount));
 };
 
+const parseGroupCount = (value) => {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalized)) return 0;
+  return parseInt(normalized, 10);
+};
+
+const matchesTagSequence = (pairs, startIndex, tags) => {
+  if (startIndex + tags.length > pairs.length) return false;
+  return tags.every((tag, offset) => pairs[startIndex + offset]?.tag === tag);
+};
+
+const inferUndefinedGroup = (pairs, countIndex) => {
+  const count = parseGroupCount(pairs[countIndex]?.value);
+  const firstDelimiterIndex = countIndex + 1;
+  const delimiter = pairs[firstDelimiterIndex]?.tag;
+
+  if (count <= 1 || delimiter === undefined) return null;
+
+  const delimiterIndexes = [firstDelimiterIndex];
+
+  for (let i = firstDelimiterIndex + 1; i < pairs.length && delimiterIndexes.length < count; i++) {
+    if (pairs[i].tag === delimiter) {
+      delimiterIndexes.push(i);
+    }
+  }
+
+  if (delimiterIndexes.length !== count) return null;
+
+  const fieldTags = pairs
+    .slice(delimiterIndexes[0], delimiterIndexes[1])
+    .map(pair => pair.tag);
+
+  // Require at least one body field after the delimiter to avoid turning simple
+  // repeated standalone tags into inferred groups.
+  if (fieldTags.length < 2) return null;
+
+  for (let i = 1; i < delimiterIndexes.length; i++) {
+    if (!matchesTagSequence(pairs, delimiterIndexes[i], fieldTags)) return null;
+  }
+
+  const endIndex = delimiterIndexes[delimiterIndexes.length - 1] + fieldTags.length;
+  if (pairs[endIndex]?.tag === delimiter) return null;
+
+  return {
+    delimiter,
+    fields: fieldTags,
+    inferred: true,
+  };
+};
+
 /**
  * Advances the index past a group (and its nested subgroups) linearly.
  * Used to "jump" over nested structures so the parent loop can continue safely.
@@ -361,7 +411,7 @@ export const groupify = (pairs, groupDefs) => {
 
   while (i < pairs.length) {
     const p = pairs[i];
-    const def = activeGroups[p.tag];
+    const def = activeGroups[p.tag] || inferUndefinedGroup(pairs, i);
 
     if (def) {
       // Found Group Count Tag

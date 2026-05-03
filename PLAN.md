@@ -1,5 +1,26 @@
 # Feature Plans
 
+## Undefined Repeating Group Inference Plan
+
+### Goal
+Detect a repeating group even when the active dictionary does not define the group count tag, as long as the message contains a repeated delimiter-led field pattern matching the count.
+
+### Implementation Steps
+- [x] Write this plan before implementation.
+- [x] Add an inference helper that treats an unknown numeric count tag as a candidate repeating group.
+- [x] Infer the candidate delimiter from the field immediately after the count tag.
+- [x] Build an inferred field list from the repeated windows and require the pattern to match the declared count.
+- [x] Apply inferred group definitions in top-level `groupify` traversal without overriding dictionary-defined groups.
+- [x] Validate with the provided `35=R` sample so `78` is detected as a group with `79`, `467`, `80`, and `7152`.
+- [x] Update `PROJECT_KNOWLEDGE.md` with the new grouping behavior.
+- [x] Run lint/build verification.
+
+### Validation
+- [x] Targeted local parser harness confirms `78` renders as an inferred group with four instances.
+- [x] Targeted local parser harness confirms each `78` instance includes `79`, `467`, `80`, and `7152`.
+- [x] Run `npm run lint`.
+- [x] Run `npm run build`.
+
 ## Repeated Unknown Group Field Inference Plan
 
 ### Goal

@@ -67,6 +67,7 @@ Primary outcomes:
 - Chooses schema by `MsgType` (`tag 35`) when available; falls back to `_global`.
 - Converts flat pairs into tree nodes for repeating groups.
 - Handles nested groups by recursively skipping and then re-processing subgroup token ranges.
+- Infers an undefined repeating group when an unknown numeric count tag is followed by a delimiter-led tag pattern that repeats exactly for the declared count.
 - Infers dictionary-missing fields as group members when an unknown tag repeats in every observed inter-instance window for a group occurrence. This supports custom tags that are omitted from the active dictionary but repeat with the group cadence.
 
 `flattenForDiff(nodes)` behavior:
@@ -120,6 +121,12 @@ Testing:
 - Diff alignment is key-path-based; complex reorder scenarios in repeating groups may still produce noisy diffs, especially across more than two messages.
 
 ## Change Log
+### 2026-05-03 - Infer Undefined Repeating Groups
+- Files: `PLAN.md`, `src/utils/parsers.js`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added dynamic group-count inference for repeated field-tag patterns when the active dictionary does not define the group count tag.
+- Behavior Impact: A message can now render `78=4` as a repeating group with four `79/467/80/7152` allocation instances even when `NoAllocs<78>` is missing from the active dictionary.
+- Verification: Targeted local parser harness confirmed `78` is inferred as four allocation instances with `79`, `467`, `80`, and `7152`; `npm run lint` passed; `npm run build` passed.
+
 ### 2026-05-03 - Infer Repeated Unknown Group Fields
 - Files: `PLAN.md`, `src/utils/parsers.js`, `PROJECT_KNOWLEDGE.md`
 - Summary: Added a per-group inference pass so repeated dictionary-missing tags can remain inside repeating-group instances.
