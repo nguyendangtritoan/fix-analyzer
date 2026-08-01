@@ -7,15 +7,19 @@ import { DEFAULT_TAGS, DEFAULT_ENUMS } from '../constants/fixData';
 export const parseQuickFixXml = (xmlString) => {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+  if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+    throw new Error('Invalid QuickFIX XML dictionary.');
+  }
   
   const newTags = { ...DEFAULT_TAGS };
   const newEnums = { ...DEFAULT_ENUMS };
+  const fieldTypes = {};
+  const messageNames = {};
   
   // The groups object will hold schemas for specific MsgTypes and a global fallback
   // Structure: { _global: { 453:Def, ... }, "D": { 453:Def, ... }, ... }
   const newGroups = { _global: {} }; 
-
-  console.log("DEBUG: Starting XML Dictionary Parse...");
 
   // ---------------------------------------------------------
   // 1. Tag & Enum Extraction (and Name->ID Resolution Map)
@@ -38,6 +42,7 @@ export const parseQuickFixXml = (xmlString) => {
       const number = parseInt(numberStr);
       newTags[number] = name;
       nameToNum[name] = number;
+      fieldTypes[number] = field.getAttribute('type') || 'STRING';
       
       // Extract Enums
       const values = field.getElementsByTagName("value");
@@ -121,8 +126,6 @@ export const parseQuickFixXml = (xmlString) => {
                 const compResult = resolveStructure(compDef, currentVisited);
                 fields = fields.concat(compResult.fields);
                 Object.assign(groups, compResult.groups);
-            } else {
-                console.warn(`DEBUG: Component '${refName}' referenced but not found.`);
             }
         }
     }
@@ -142,6 +145,7 @@ export const parseQuickFixXml = (xmlString) => {
               const msgType = msgNode.getAttribute("msgtype");
               if (msgType) {
                   messagesFound = true;
+                  messageNames[msgType] = msgNode.getAttribute('name') || msgType;
                   const { groups } = resolveStructure(msgNode, new Set());
                   newGroups[msgType] = groups;
                   
@@ -162,7 +166,6 @@ export const parseQuickFixXml = (xmlString) => {
 
   // Fallback: If no <messages> block, scan for loose global groups
   if (!messagesFound) {
-      console.log("DEBUG: No <messages> block found. Scanning global groups.");
       const allGroups = xmlDoc.getElementsByTagName("group");
       for (let i = 0; i < allGroups.length; i++) {
           const gNode = allGroups[i];
@@ -185,8 +188,13 @@ export const parseQuickFixXml = (xmlString) => {
       }
   }
 
-  console.log(`DEBUG: Dictionary Parsed. Schemas loaded: [${Object.keys(newGroups).join(', ')}]`);
-  return { tags: newTags, enums: newEnums, groups: newGroups };
+  return {
+    tags: newTags,
+    enums: newEnums,
+    groups: newGroups,
+    fieldTypes,
+    messageNames,
+  };
 };
 
 
@@ -397,7 +405,6 @@ export const groupify = (pairs, groupDefs) => {
   const msgTypeTag = pairs.find(p => p.tag === 35); // MsgType
   
   if (msgTypeTag && groupDefs[msgTypeTag.value]) {
-      console.log(`DEBUG: Processing with schema for MsgType: ${msgTypeTag.value}`);
       activeGroups = groupDefs[msgTypeTag.value];
   } else if (groupDefs._global) {
       // console.log("DEBUG: Processing with global fallback schema.");
@@ -435,7 +442,6 @@ export const groupify = (pairs, groupDefs) => {
         
         // Check Delimiter
         if (pairs[i].tag !== def.delimiter) {
-            console.warn(`DEBUG: Group ${p.tag} break: Expected delimiter ${def.delimiter}, found ${pairs[i].tag}`);
             break; 
         }
 

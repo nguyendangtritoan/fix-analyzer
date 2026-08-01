@@ -8,119 +8,135 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-05-03
+Last Updated: 2026-08-01
 
 ## Project Purpose
-`fix-analyzer` is a client-side React app for parsing and comparing FIX messages from inconsistent log formats.
+`fix-analyzer` is a privacy-first, static React application with two browser-only workflows:
+- Message Analyzer parses, enriches, and compares individual FIX messages.
+- Visual Board analyzes a pasted or plain-text FIX log as correlated lifecycles, sequence flows, latency, prices, orders, and diagnostics.
 
-Primary outcomes:
-- Parse multiple FIX text styles into normalized tag/value pairs.
-- Visualize one message (`SingleView`) with optional repeating-group hierarchy.
-- Compare multiple messages (`DiffView`) with semantic alignment and diff highlighting.
-- Resolve tag names and enum descriptions via built-in defaults or uploaded QuickFIX XML dictionaries.
+No backend exists. Confidential imported content must remain in the current browser tab and must never be transmitted or persisted by application code.
 
 ## Stack and Runtime
 - Frontend: React 19, Vite 7, Tailwind CSS 3, Lucide icons.
-- Build output: static site (`dist/`).
-- Deployment target: GitHub Pages, workflow in `.github/workflows/deploy.yml`.
-- Vite base path is hardcoded to `/fix-analyzer/` in `vite.config.js` (important for hosting under repo subpath).
-- No backend; parsing and dictionary handling are entirely browser-side.
+- Routing: native hash routing in `src/app/useHashRoute.js`; no router dependency.
+- Worker: native ES module Web Worker for Visual Board parsing and retained source access.
+- Tests: Node's built-in `node:test`; no test-framework dependency.
+- Build output: static site (`dist/`) with base path `/fix-analyzer/`.
+- Deployment: GitHub Pages workflow in `.github/workflows/deploy.yml`.
 
 ## Repository Map (High Signal)
-- `src/App.jsx`: top-level state and orchestration (inputs, mode, dictionary state, auto detection, layout).
-- `src/utils/parsers.js`: core parsing engine (`parseFixMessage`, `parseQuickFixXml`, `groupify`, `flattenForDiff`).
-- `src/utils/fixUtils.js`: tag lookup, enum display helper, clipboard copy, output re-serialization.
-- `src/utils/highlightUtils.js`: shared matching-tag highlight palette and class lookup.
-- `src/components/features/SingleView.jsx`: grouped tree rendering for one message.
-- `src/components/features/DiffView.jsx`: flatten+align comparison table and row status styling.
-- `src/components/features/DictionaryControls.jsx`: auto/manual/custom dictionary selector UI.
-- `src/components/features/CopyDropdown.jsx`: copy/export formats (`pipe`, `soh`, `bracketed`, `columnar`, `json`).
-- `src/constants/fixData.js`: fallback tag and enum dictionaries.
-- `public/dictionaries/*.xml`: bundled QuickFIX dictionaries (`FIX40` to `FIX44`).
+- `src/App.jsx`: mounts the shared dictionary provider and app shell.
+- `src/app/AppShell.jsx`: header, route navigation, local-only indicator, shared dictionary controls.
+- `src/app/useHashRoute.js`: maps the root route to Message Analyzer and `#/visual-board` to Visual Board.
+- `src/context/FixDictionaryProvider.jsx`: owns standard/custom dictionary state for both routes.
+- `src/pages/MessageAnalyzerPage.jsx`: original multi-message parse/diff workflow.
+- `src/pages/VisualBoardPage.jsx`: dashboard orchestration and result filters/tabs.
+- `src/features/visualBoard/logAnalysis.js`: pure log parsing, exact-ID correlation, grouping, statistics, latency, price/order projections, and diagnostics.
+- `src/features/visualBoard/visualBoard.worker.js`: owns selected file/source text and serves compact results, message details, and arbitrary-field queries.
+- `src/features/visualBoard/useVisualBoardWorker.js`: worker lifecycle, cancellation, input validation, and 100 MB safety limit.
+- `src/features/visualBoard/*.jsx`: importer, group explorer, virtual sequence board, message drawer, and analysis panels.
+- `src/utils/parsers.js`: individual-message parsing and QuickFIX XML dictionary parsing/grouping.
+- `src/components/features/SingleView.jsx`: dictionary-enriched grouped message rendering, reused by the drawer.
+- `src/constants/dictionarySources.js`: metadata for FIX 4.0–4.4 bundled dictionaries.
+- `vite.config.js`: embeds dictionary XML at build time and injects the production CSP.
+- `scripts/verify-local-only.mjs`: checks forbidden network APIs, runtime dependencies, and CSP settings.
 
-## Runtime Data Flow
-1. User input enters the dynamic `messageInputs` list in `App.jsx`.
-2. Each message input is parsed with `parseFixMessage` via `useMemo`.
-3. Dictionary source is selected from:
-- Auto-detected standard dictionary from tag `8=FIX.x.y`.
-- Manual standard selection (`FIX40`-`FIX44`).
-- Custom uploaded XML.
-4. `SingleView` and `DiffView` consume parsed pairs plus dictionary maps (`tags`, `enums`) and group definitions (`groups`).
-5. Diff mode receives only populated message slots and is enabled when at least two messages contain input.
-6. Result view interaction state, including group indentation and active highlighted tag/color assignments, is owned by `App.jsx` and passed to both views.
-7. Copy/export uses parsed arrays to generate alternate string formats.
+## Routes and Shared State
+- Empty hash/root: Message Analyzer.
+- `#/visual-board`: Visual Board.
+- Navigation is hash based so static hosting needs no rewrite rules.
+- FIX 4.0–4.4 XML is converted to a virtual JavaScript module by Vite, eliminating runtime dictionary fetches.
+- Auto-detection reads `BeginString(8)` from current input/results. Manual selection and local custom XML upload remain available.
+- Custom dictionaries exist only in memory and are shared between both routes for the lifetime of the tab.
 
-## Parser and Grouping Behavior
+## Message Analyzer Behavior
 `parseFixMessage(raw)` heuristic order:
-1. Bracketed format detection (`<35> MsgType = D` style).
-2. Columnar row detection (`FieldName Tag Value` style).
-3. Delimited parsing after normalizing `|` and `^A` to SOH.
-4. Fallback regex for space-separated `tag=value` tokens when SOH is absent.
+1. Bracketed format detection (`<35> MsgType = D`).
+2. Columnar row detection.
+3. Delimited parsing after normalizing pipe and `^A` to SOH.
+4. Best-effort regex for space-separated `tag=value` tokens.
 
-`parseQuickFixXml(xml)` behavior:
-- Merges parsed definitions into defaults instead of replacing them entirely.
-- Builds `tags`, `enums`, and recursive repeating-group schemas.
-- Creates both per-`MsgType` group maps and `_global` fallback group map.
-- Resolves nested components/groups recursively with cycle guard.
+`parseQuickFixXml(xml)` merges definitions into defaults and produces tags, enums, field types, message names, and recursive repeating-group schemas. Invalid XML produces a user-facing error.
 
-`groupify(pairs, groupDefs)` behavior:
-- Chooses schema by `MsgType` (`tag 35`) when available; falls back to `_global`.
-- Converts flat pairs into tree nodes for repeating groups.
-- Handles nested groups by recursively skipping and then re-processing subgroup token ranges.
-- Infers an undefined repeating group when an unknown numeric count tag is followed by a delimiter-led tag pattern that repeats exactly for the declared count.
-- Infers dictionary-missing fields as group members when an unknown tag repeats in every observed inter-instance window for a group occurrence. This supports custom tags that are omitted from the active dictionary but repeat with the group cadence.
+`groupify` selects a `MsgType(35)` schema, renders nested repeating groups, and retains the previous inference behavior for dictionary-missing count/member tags. `flattenForDiff` aligns grouped trees across all populated inputs. Matching tags can be highlighted with multiple colors and visual indentation can be toggled independently of grouping.
 
-`flattenForDiff(nodes)` behavior:
-- Flattens grouped tree to path-based keys for alignment across messages.
-- Adds synthetic header rows for group count nodes.
+## Visual Board Data Flow
+1. `ImportPanel` accepts pasted text or uncompressed `.log`, `.txt`, and `.fix` files up to 100 MB.
+2. Compressed extensions (`bz2`, `gz`, `zip`, `7z`, `rar`, `xz`, `zst`) are rejected with instructions to decompress locally. No decompression dependency is included.
+3. The Web Worker reads the `File`, parses log-prefix metadata and FIX pairs, and keeps one source string plus message byte/character offsets.
+4. The main thread receives compact records without raw log lines.
+5. Selecting a message asks the worker for the original line and duplicate-preserving pairs on demand.
+6. Arbitrary-field projection asks the worker to scan the retained source for one numeric tag.
+7. Clear, cancel, route teardown, reload, or tab close terminates the worker and releases its dataset.
 
-## Diff and View Semantics
-- `SingleView`: hierarchical rows with expand/collapse for group instances and optional depth guides.
-- `DiffView`: multiple flattened streams are aligned through a unified key list built from every populated message.
-- The app starts with two message input slots in the original two-column full-width layout. Pressing `+ Message` adds another input slot and switches the input grid to support additional columns; users can remove extra slots while at least two remain.
-- The `Group indent` results toolbar toggle defaults to on; when off, it removes depth padding and single-view guide bars without changing grouping, expansion, or diff alignment.
-- Clicking a field row in single or diff view highlights every visible row with the same tag. Multiple tags can be highlighted at once with distinct colors; clicking a field whose tag is already highlighted removes only that tag's highlight. Single-view group rows use the row click for tag highlight and the chevron button for expand/collapse.
-- Row coloring in diff:
-- Group header row: neutral section style.
-- Value difference: yellow.
-- Missing on either side: red with `MISSING` marker.
+## Visual Board Parsing and Correlation
+- Prefix parsing extracts timestamp, incoming/outgoing direction, and common `sender->target:qualifier` session labels.
+- SOH, `^A`, pipe, and best-effort whitespace FIX bodies are supported.
+- Duplicate FIX fields are preserved in ordered detail pairs; an index also exposes convenient first values.
+- Correlation uses disjoint-set graph merging with exact IDs only:
+  - `ClOrdID(11)` / `OrigClOrdID(41)`
+  - `OrderID(37)`
+  - `QuoteReqID(131)`
+  - `QuoteID(117)`
+  - session-scoped `MDReqID(262)`
+- Bridge messages can join RFQ → Quote → Order → Execution lifecycles across sessions.
+- Broad attributes such as symbol, currency, or timestamps never merge groups.
+- Detected group types are `rfq-order`, `rfq`, `order`, `market-data`, and `session`.
 
-## Dictionary Behavior Details
-- Initial dictionary load on mount: `FIX44`.
-- Auto mode loads dictionary inferred from `BeginString` (`8=FIX.4.x`) if supported.
-- Supported standard versions: `FIX40`, `FIX41`, `FIX42`, `FIX43`, `FIX44`.
-- Uploading custom XML locks dictionary mode to manual and overrides active definitions.
-- Clearing custom dictionary resets to auto mode and reloads `FIX44`.
+## Latency, Tables, and Diagnostics
+- Capture lag is `log prefix timestamp - SendingTime(52)` and is not presented as request/response latency.
+- Matched round-trip latency pairs `New Order Single (D)` with `Execution Report (8)` by exact `ClOrdID(11)` in session context.
+- Prices table uses the latest Quote (`S`) or Market Data Snapshot (`W`) per source/symbol/request identity.
+- Orders table enriches orders with matching executions, status, IDs, price/quantity, and round-trip latency.
+- Diagnostics include skipped lines, sequence gaps/resets, rejects, unmatched orders, capture-lag anomalies, and FIX envelope mismatches.
+- `BodyLength(9)` and `CheckSum(10)` are validated only when real SOH framing is available.
+- The sequence board uses fixed-row windowing implemented in project code; no virtualization package was added.
+
+## Local-Only Security Contract
+- Application source must not call `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, or `navigator.sendBeacon`.
+- No analytics, telemetry, remote fonts/assets, CDN resources, or CSP reporting endpoints.
+- Production CSP includes `connect-src 'none'`, `worker-src 'self' blob:`, `object-src 'none'`, `form-action 'none'`, and `frame-src 'none'`.
+- `npm run verify:security` enforces the source/API, dependency, and CSP parts of this contract.
+- Imported data is not placed in URL/hash, localStorage, sessionStorage, IndexedDB, cookies, or service-worker caches.
+- The static host and browser extensions are outside the app's trust boundary; README describes this limitation explicitly.
 
 ## Dev and Operations
 Common commands:
 - `npm install`
 - `npm run dev`
+- `npm test`
 - `npm run lint`
 - `npm run build`
+- `npm run verify:security`
 - `npm run preview`
 
-Deployment:
-- Push to `master` triggers GitHub Pages workflow.
-- Build artifact is `dist/`.
+The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check`.
 
-## Current Baseline (2026-05-03)
-Build status:
-- `npm run build` passes.
-
-Lint status:
-- `npm run lint` passes.
-
-Testing:
-- No automated unit/integration test suite is present in repository.
+## Current Baseline (2026-08-01)
+- Eight Visual Board parser/correlation tests pass.
+- ESLint passes.
+- Production build passes and includes the strict CSP.
+- Local-only security verification passes.
+- Browser QA covers import example, all result tabs, the detail/raw drawer, arbitrary field projection, and clear-data behavior.
+- The embedded FIX XML makes the main bundle exceed Vite's default 500 kB warning threshold; this is an intentional no-runtime-fetch tradeoff.
 
 ## Known Risks and Gotchas
-- `src/App.css` appears to be Vite starter CSS and is not imported by current app entry.
-- Clipboard copy uses `document.execCommand('copy')` (legacy API; works broadly but is not modern Clipboard API).
-- Parser is intentionally heuristic and tolerant, so malformed inputs may still produce partial output (by design).
-- Diff alignment is key-path-based; complex reorder scenarios in repeating groups may still produce noisy diffs, especially across more than two messages.
+- Parser behavior is intentionally tolerant; malformed or vendor-specific text can yield partial messages or skipped-line diagnostics.
+- Exact-ID correlation avoids false positives but cannot infer a lifecycle when the producer omits all supported bridge identifiers.
+- `MDReqID(262)` is session-scoped; incorrect/missing session prefixes reduce correlation quality.
+- Round-trip matching currently covers `D → 8`, not every possible FIX request/response pair.
+- A 100 MB input can still consume several times that amount in transient browser/worker memory; keep compact records free of raw lines and avoid unnecessary source copies.
+- Diff alignment remains key-path based, so complex repeating-group reorder scenarios may be noisy.
+- `src/App.css` is unused Vite starter CSS.
 
 ## Change Log
+### 2026-08-01 - Add Local-Only Visual Board
+- Files: `README.md`, `index.html`, `package.json`, `vite.config.js`, `scripts/verify-local-only.mjs`, `src/App.jsx`, `src/app/*`, `src/context/*`, `src/constants/dictionarySources.js`, `src/pages/*`, `src/features/visualBoard/*`, `src/utils/parsers.js`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added the Visual Board route, shared bundled dictionary state, worker-based log analysis, exact-ID lifecycle grouping, sequence/latency/price/order/diagnostic views, on-demand message detail, tests, and a production local-only CSP. Preserved the existing Message Analyzer as the root route.
+- Behavior Impact: Users can analyze plain FIX logs entirely in the browser, inspect detected groups and pretty messages, project arbitrary tags, distinguish capture lag from matched order latency, and clear all in-memory data. Compressed inputs are explicitly rejected; no external decompression or UI package was added.
+- Verification: `npm test` passed 8 tests; `npm run lint` passed; `npm run build` passed; `npm run verify:security` passed; in-app browser QA passed example import, Overview/Flow/Latency/Quotes & Prices/Orders/Diagnostics tabs, message pretty/raw drawer, `55` field projection, and data clearing; production preview/CSP and final diff checks completed before handoff.
+
 ### 2026-05-03 - Infer Undefined Repeating Groups
 - Files: `PLAN.md`, `src/utils/parsers.js`, `PROJECT_KNOWLEDGE.md`
 - Summary: Added dynamic group-count inference for repeated field-tag patterns when the active dictionary does not define the group count tag.

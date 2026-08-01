@@ -1,153 +1,94 @@
-# Senior FIX Analyzer
+# FIX Analyzer
 
-## 1. Project Overview
+FIX Analyzer is a privacy-first React application for inspecting individual FIX messages, comparing messages, and exploring complete FIX log lifecycles. Everything runs inside the browser tab; the application has no backend and does not transmit imported messages.
 
-**FIX Analyzer** is a robust, client-side web application designed to parse, visualize, and compare Financial Information eXchange (FIX) messages.
+## Features
 
-Unlike simple regex parsers, this tool is architected to handle the messy reality of financial logs. It polymorphically detects various formats (Raw SOH, Pipe-delimited, Columnar logs, Bracketed debug strings, and Caret notation) and normalizes them into a structured format for analysis.
+### Message Analyzer
 
-### Key Capabilities
+- Parses SOH, `^A`, pipe-delimited, bracketed, columnar, and best-effort space-separated FIX text.
+- Shows a dictionary-enriched, grouped view of one message.
+- Compares two or more messages with aligned fields and repeating groups.
+- Uses bundled FIX 4.0–4.4 QuickFIX dictionaries or a locally selected custom XML dictionary.
+- Copies a message as pipe, SOH, bracketed, columnar, or JSON text.
 
-* **Polymorphic Parsing:** Auto-detects and parses inconsistent log formats without user configuration.
-* **Semantic Diffing:** Compares two FIX messages side-by-side, intelligently aligning repeating groups (e.g., `NoPartyIDs`) to highlight actual data discrepancies.
-* **Dynamic Dictionary:** Ships with standard specifications for **FIX 4.0 - 4.4**, but supports runtime injection of custom QuickFIX XML dictionaries (e.g., `FIX50.xml`) to override tags and enums.
-* **Format Interoperability:** Instantly converts parsed messages between specific formats (JSON, Raw SOH, Columnar) for debugging in other tools.
+### Visual Board
 
----
+Open `#/visual-board` or use the top navigation. The board accepts pasted text and uncompressed `.log`, `.txt`, and `.fix` files up to 100 MB.
 
-## 2. Architecture & Design Patterns
+- Correlates messages into detected RFQ, order, market-data, and session lifecycles.
+- Uses exact business identifiers such as `ClOrdID(11)`, `OrigClOrdID(41)`, `OrderID(37)`, `QuoteReqID(131)`, `QuoteID(117)`, and session-scoped `MDReqID(262)`.
+- Shows virtualized chronological flows, direction, message type, common IDs, capture lag, and matched `D → 8` round-trip latency.
+- Opens any row as a dictionary-enriched message drawer while preserving duplicate fields and the original log line.
+- Projects any numeric FIX field onto the sequence board.
+- Summarizes message types, directions, sessions, groups, latency, latest quote/market-data prices, orders, executions, rejects, sequence gaps, and envelope checks.
+- Reports skipped input lines rather than silently treating them as FIX messages.
 
-The application follows a **Functional, Component-Based Architecture** using React. It strictly separates **Data Definition**, **Pure Logic**, and **UI Presentation**.
+Compressed files, including `.bz2`, are intentionally unsupported. Decompress confidential logs with a trusted local operating-system tool, then select the resulting plain-text file. No decompression package is included.
 
-### Core Design Principles
+## Privacy and local-only guarantees
 
-1.  **Client-Side Privacy:** All parsing happens in the browser memory. No data is ever sent to a server, ensuring compliance with financial data privacy rules.
-2.  **Heuristic Parsing:** Instead of strict validation, the parser uses "best-effort" heuristics to extract usable data even from malformed or partial log lines.
-3.  **Separation of Concerns:**
-    * `constants/`: Static truth (Tag numbers, Enum definitions).
-    * `utils/`: Pure functions for parsing and formatting. **Zero UI dependencies.**
-    * `components/`: UI layer. `features/` contain business-aware components; `ui/` contains dumb presentational atoms.
+Imported content exists only in the current browser tab's memory:
 
----
+- Log parsing and correlation run in a Web Worker.
+- The worker retains the source text for on-demand details; the main UI receives compact records and source offsets rather than every raw line.
+- Clearing the board, closing/reloading the tab, or terminating the worker releases the in-memory dataset.
+- The application does not use `fetch`, XHR, WebSockets, EventSource, beacons, analytics, telemetry, remote fonts, or CDN assets.
+- Standard FIX XML dictionaries are embedded into the JavaScript bundle at build time, so selecting a dictionary does not cause a runtime request.
+- Production builds inject a Content Security Policy with `connect-src 'none'` and no reporting endpoint.
 
-## 3. Project Structure
+The static application files still have to be served to the browser. After the page has loaded, the CSP prevents the application from opening network connections. Browser extensions and the hosting platform are outside the application's control.
 
-This map guides you to the relevant logic quickly.
+## Development
 
-```text
-src/
-├── constants/
-│   └── fixData.js          # DEFAULT_TAGS and DEFAULT_ENUMS. The fallback dictionary.
-│
-├── utils/
-│   ├── parsers.js          # CRITICAL. Contains `parseFixMessage` (heuristics) & `parseQuickFixXml`.
-│   └── fixUtils.js         # Formatting helpers (Tag lookups, clipboard logic).
-│
-├── components/
-│   ├── features/
-│   │   ├── DiffView.jsx           # Complex logic for aligning and coloring side-by-side messages.
-│   │   ├── SingleView.jsx         # Simple table rendering for a single message.
-│   │   ├── DictionaryControls.jsx # Manages FIX version selection and custom XML uploads.
-│   │   └── CopyDropdown.jsx       # Logic for re-serializing data into different formats.
-│   │
-│   └── ui/
-│       ├── TagBadge.jsx    # Visual atom for the Tag ID.
-│       └── EmptyState.jsx  # Placeholder UI.
-│
-└── App.jsx                 # Orchestrator. Manages global state (inputs, dictionary) and layout.
-
-```
-
----
-
-## 4. Critical Logic Deep Dive
-
-### A. The Polymorphic Parser (`utils/parsers.js`)
-
-The `parseFixMessage` function is the engine of the app. It does not blindly split strings. It applies three heuristics in order:
-
-1. **Bracketed Detection:** Checks for patterns like `<35>`. Useful for proprietary engine logs.
-2. **Columnar Detection:** Checks for "Name Tag Value" patterns common in human-readable log files.
-3. **Delimiter Detection:** Falls back to standard SOH (`\x01`), Pipe (`|`), or Caret (`^A`) delimiters. It handles edge cases where SOH characters are lost during copy-paste or represented as visual control characters.
-
-> **Modification Point:** If you encounter a new log format that isn't parsing, add a new RegEx heuristic at the top of this function.
-
-### B. The Diff Algorithm (`components/features/DiffView.jsx`)
-
-Standard diff tools fail on FIX messages because FIX is order-dependent but often contains unordered fields outside of repeating groups.
-
-* **Strategy:** The app creates a "Superset" of all tags found in both messages.
-* **Sorting:** It sorts tags semantically: Headers first (8, 9, 35, 49, 56), body numerically, and Trailers last (10).
-* **Repeating Groups:** It handles arrays of values for a single tag. It compares index-to-index (e.g., `PartyID[0]` vs `PartyID[0]`).
-* **Visuals:**
-* 🟡 **Yellow:** Modification (Value A != Value B).
-* 🔴 **Red:** Deletion (Present in A, missing in B).
-* 🟢 **Green/Normal:** Addition (Missing in A, present in B - usually implies the second message has new data).
-
-
-
-### C. Dictionary Injection (`parseQuickFixXml`)
-
-The app allows users to upload a QuickFIX-style XML.
-
-* **Logic:** It parses DOM elements `<field number="..." name="...">` and nested `<value enum="..." description="...">`.
-* **State:** The `App.jsx` state tags and enums are updated. All child components read from these props, ensuring instant UI updates upon file load.
-
----
-
-## 5. Development Guide
-
-### Prerequisites
-
-* Node.js v20+ (Consistent with CI environment)
-* npm
-
-### Setup
-
-This project uses **Vite** for fast HMR and building.
+Requirements: Node.js 20+ and npm.
 
 ```bash
 npm install
 npm run dev
-
 ```
 
-### Linting
-
-Ensure code quality before committing:
+Useful checks:
 
 ```bash
+npm test
 npm run lint
-
+npm run build
+npm run verify:security
+npm run preview
 ```
 
-### Styling
+`npm test` uses Node's built-in test runner; no test framework dependency is required. `verify:security` scans application source for browser network APIs, checks runtime dependencies against the allowlist, and verifies the production CSP configuration.
 
-We use **Tailwind CSS** with **Lucide React** icons.
+## Architecture
 
-* **Theme:** Colors are chosen to mimic professional financial terminals (Slate/Gray backgrounds, Monospace fonts for values, high-contrast Red/Green/Yellow for diffs).
-* **Responsiveness:** The layout shifts from Single Column (Mobile) to Two-Pane (Desktop) automatically.
+```text
+src/
+├── app/                         # Hash route and shared application shell
+├── context/                     # Shared FIX dictionary provider
+├── pages/
+│   ├── MessageAnalyzerPage.jsx  # Existing parse/diff workflow
+│   └── VisualBoardPage.jsx      # Log-analysis dashboard
+├── features/visualBoard/
+│   ├── logAnalysis.js           # Pure parsing, grouping, latency, stats, diagnostics
+│   ├── visualBoard.worker.js    # File/text ownership and on-demand detail queries
+│   └── *.jsx                    # Importer, board, drawer, and analysis panels
+├── components/                  # Existing message-analysis UI
+├── utils/                       # FIX and QuickFIX XML parsers/formatters
+└── constants/                   # Fallback FIX data and bundled dictionary metadata
+```
 
-### Adding a New Export Format
+Routing is a small native hash router, so the static GitHub Pages deployment does not require server rewrites or an additional routing package. The Vite base path remains `/fix-analyzer/`.
 
-To add a format (e.g., CSV):
+## Analysis semantics
 
-1. Go to `utils/fixUtils.js` -> `generateOutput`.
-2. Add a new case `'csv': ... logic`.
-3. Go to `components/features/CopyDropdown.jsx` and add the option to the `options` array.
+- Capture lag is `log-prefix timestamp − SendingTime(52)` and is kept separate from request/response latency.
+- Round-trip latency currently pairs `New Order Single (D)` with the matching `Execution Report (8)` by `ClOrdID(11)` within its session context.
+- Correlation intentionally ignores broad fields such as symbol or currency to avoid combining unrelated lifecycles.
+- `MDReqID(262)` is session-scoped to prevent identical request IDs on separate sessions from merging.
+- FIX `BodyLength(9)` and `CheckSum(10)` are validated only when the source preserves real SOH framing; otherwise the message remains usable without a misleading failure.
+- Parsing is tolerant by design. A malformed or vendor-specific line may be partially parsed or reported as skipped.
 
----
+## Deployment
 
-## 6. Deployment
-
-The project is configured for automated deployment to **GitHub Pages** via GitHub Actions.
-
-* **Workflow:** `.github/workflows/deploy.yml`
-* **Trigger:** Pushes to the `master` branch.
-* **Process:**
-1. Checks out code.
-2. Sets up Node v20.
-3. Builds the project (`npm run build`) to the `dist/` folder.
-4. Uploads and deploys the artifact to GitHub Pages.
-
-## 7. Future Roadmap / Known Limitations
+The existing GitHub Pages workflow builds the static application from `master`. The production bundle includes the strict local-only CSP. The embedded XML dictionaries make the main bundle larger than a typical small React application; this is an intentional tradeoff to avoid runtime dictionary requests.
