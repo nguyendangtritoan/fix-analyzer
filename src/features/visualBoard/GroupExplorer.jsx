@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Boxes, ChevronRight, Search, Unlink } from 'lucide-react';
+import { Boxes, ChevronLeft, ChevronRight, Search, Unlink } from 'lucide-react';
 import { formatDuration, formatInteger } from './formatters';
+import { paginateItems } from './pagination';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 const TYPE_LABELS = {
   'rfq-order': 'RFQ / Order',
@@ -23,6 +26,8 @@ const TYPE_TONES = {
 const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungroupedCount }) => {
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const availableTypes = useMemo(() => [...new Set(groups.map(group => group.type))], [groups]);
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -31,6 +36,7 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
       && (!query || group.label.toLowerCase().includes(query) || group.correlations.some(item => item.value.toLowerCase().includes(query)))
     ));
   }, [groups, search, type]);
+  const pagination = useMemo(() => paginateItems(filtered, page, pageSize), [filtered, page, pageSize]);
 
   return (
     <aside className="flex min-h-[680px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -41,9 +47,9 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
         </div>
         <div className="relative mb-2">
           <Search className="absolute left-2.5 top-2.5 text-slate-400" size={14} />
-          <input value={search} onChange={event => setSearch(event.target.value)} className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-400" placeholder="Search IDs or groups" />
+          <input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-400" placeholder="Search IDs or groups" />
         </div>
-        <select value={type} onChange={event => setType(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 outline-none focus:border-blue-400">
+        <select value={type} onChange={event => { setType(event.target.value); setPage(1); }} className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600 outline-none focus:border-blue-400">
           <option value="all">All group types</option>
           {availableTypes.map(value => <option key={value} value={value}>{TYPE_LABELS[value] || value}</option>)}
         </select>
@@ -58,8 +64,8 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
-        {filtered.map(group => {
+      <div className="flex-1 p-2">
+        {pagination.items.map(group => {
           const selected = selectedGroupId === group.id;
           return (
             <button
@@ -83,6 +89,48 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
           );
         })}
         {!filtered.length && <p className="p-5 text-center text-xs text-slate-400">No groups match these filters.</p>}
+      </div>
+
+      <div className="border-t border-slate-200 p-3">
+        <div className="mb-2 flex items-center justify-between gap-3 text-[10px] text-slate-500">
+          <span>
+            {filtered.length
+              ? `${formatInteger(pagination.start)}–${formatInteger(pagination.end)} of ${formatInteger(filtered.length)}`
+              : '0 groups'}
+          </span>
+          <label className="flex items-center gap-1.5">
+            <span>Per page</span>
+            <select
+              value={pageSize}
+              onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}
+              className="rounded border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-semibold text-slate-600 outline-none focus:border-blue-400"
+              aria-label="Groups per page"
+            >
+              {PAGE_SIZE_OPTIONS.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setPage(Math.max(1, pagination.page - 1))}
+            disabled={pagination.page === 1}
+            className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft size={12} /> Previous
+          </button>
+          <span className="text-[10px] font-semibold text-slate-500">
+            Page {formatInteger(pagination.page)} of {formatInteger(pagination.pageCount)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(Math.min(pagination.pageCount, pagination.page + 1))}
+            disabled={pagination.page === pagination.pageCount}
+            className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next <ChevronRight size={12} />
+          </button>
+        </div>
       </div>
     </aside>
   );

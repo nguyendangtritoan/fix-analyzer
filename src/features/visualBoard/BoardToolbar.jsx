@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
+import { Clock3, Filter, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
 
 const BoardToolbar = ({ filters, onFiltersChange, messageTypes, fieldTag, onFieldApply, fieldLoading }) => {
   const [fieldInput, setFieldInput] = useState(fieldTag || '');
@@ -26,6 +26,36 @@ const BoardToolbar = ({ filters, onFiltersChange, messageTypes, fieldTag, onFiel
           <option value="outgoing">Outgoing</option>
           <option value="unknown">Unknown</option>
         </select>
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2" title="Inclusive UTC time-of-day range. A start later than the end spans midnight.">
+          <Clock3 className="shrink-0 text-slate-400" size={13} />
+          <label className="flex items-center gap-1">
+            <span className="text-[10px] font-semibold text-slate-400">From</span>
+            <input
+              type="time"
+              step="0.001"
+              value={filters.timeFrom}
+              onChange={event => update({ timeFrom: event.target.value })}
+              className="w-[112px] py-2 font-mono text-xs text-slate-600 outline-none"
+              aria-label="From time UTC"
+            />
+          </label>
+          <span className="text-slate-300">–</span>
+          <label className="flex items-center gap-1">
+            <span className="text-[10px] font-semibold text-slate-400">To</span>
+            <input
+              type="time"
+              step="0.001"
+              value={filters.timeTo}
+              onChange={event => update({ timeTo: event.target.value })}
+              className="w-[112px] py-2 font-mono text-xs text-slate-600 outline-none"
+              aria-label="To time UTC"
+            />
+          </label>
+          {(filters.timeFrom || filters.timeTo) && (
+            <button type="button" onClick={() => update({ timeFrom: '', timeTo: '' })} className="p-1 text-slate-400 hover:text-slate-700" aria-label="Clear time range"><X size={13} /></button>
+          )}
+          <span className="pr-1 text-[9px] font-bold text-slate-400">UTC</span>
+        </div>
         <label className="relative">
           <SlidersHorizontal className="pointer-events-none absolute left-2.5 top-2.5 text-slate-400" size={13} />
           <select value={filters.latencyMode} onChange={event => update({ latencyMode: event.target.value })} className="rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-7 text-xs text-slate-600 outline-none focus:border-blue-400">

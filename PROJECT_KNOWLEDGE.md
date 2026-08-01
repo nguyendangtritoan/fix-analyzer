@@ -92,6 +92,8 @@ No backend exists. Confidential imported content must remain in the current brow
 - Diagnostics include skipped lines, sequence gaps/resets, rejects, unmatched orders, capture-lag anomalies, and FIX envelope mismatches.
 - `BodyLength(9)` and `CheckSum(10)` are validated only when real SOH framing is available.
 - The sequence board uses fixed-row windowing implemented in project code; no virtualization package was added.
+- The detected-groups explorer renders groups in pages, defaults to 25 rows, and supports 10, 25, 50, or 100 groups per page. Search and type filters reset it to the first page.
+- Flow filters include an inclusive UTC time-of-day range with second/millisecond precision, open-ended bounds, and overnight ranges when the start is later than the end.
 
 ## Local-Only Security Contract
 - Application source must not call `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, or `navigator.sendBeacon`.
@@ -114,7 +116,7 @@ Common commands:
 The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check`.
 
 ## Current Baseline (2026-08-01)
-- Eight Visual Board parser/correlation tests pass.
+- Fourteen Visual Board parser/correlation, pagination, and time-range tests pass.
 - ESLint passes.
 - Production build passes and includes the strict CSP.
 - Local-only security verification passes.
@@ -131,6 +133,24 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - `src/App.css` is unused Vite starter CSS.
 
 ## Change Log
+### 2026-08-01 - Remove Visual Board Page Header
+- Files: `src/pages/VisualBoardPage.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Removed the Visual Board page header, including its title, eyebrow, explanatory subtitle, and duplicate browser-memory badge.
+- Behavior Impact: The import panel or loaded-dataset toolbar is now the first page content. The destructive Clear data action lives beside the loaded dataset's analysis tabs, visually tying it to the data it clears and eliminating empty header space.
+- Verification: `npm test` passed 14 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed; the running local app accepted the update through HMR.
+
+### 2026-08-01 - Filter Flow by UTC Time Range
+- Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/BoardToolbar.jsx`, `src/features/visualBoard/timeRange.js`, `src/features/visualBoard/timeRange.test.js`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added inclusive From/To UTC time-of-day controls to the Flow toolbar and pure range matching with seconds, optional milliseconds, open bounds, and midnight wrapping.
+- Behavior Impact: Users can narrow the visible message sequence to times such as `08:09:10` through `08:09:15`; records without timestamps are excluded while a time filter is active.
+- Verification: `npm test` passed 14 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Aggregate-only analysis of the supplied local log reduced 57,260 messages to 25 for the inclusive `08:09:10`–`08:09:15` UTC range.
+
+### 2026-08-01 - Paginate Detected Groups
+- Files: `src/features/visualBoard/GroupExplorer.jsx`, `src/features/visualBoard/pagination.js`, `src/features/visualBoard/pagination.test.js`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added bounded pagination to the detected-groups explorer with previous/next navigation, visible-range metadata, and selectable 10/25/50/100 page sizes.
+- Behavior Impact: Large correlated logs no longer render every group card at once. Search, group-type, dataset, and page-size changes return the explorer to page one while preserving full-dataset filtering.
+- Verification: `npm test` passed 10 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Aggregate-only analysis of the supplied local 31.7 MB log found 57,260 messages and 185 groups. Browser QA confirmed the 25-row default, next-page navigation, the 100-row option, filter reset to page one, and no console errors.
+
 ### 2026-08-01 - Add Local-Only Visual Board
 - Files: `README.md`, `index.html`, `package.json`, `vite.config.js`, `scripts/verify-local-only.mjs`, `src/App.jsx`, `src/app/*`, `src/context/*`, `src/constants/dictionarySources.js`, `src/pages/*`, `src/features/visualBoard/*`, `src/utils/parsers.js`, `PROJECT_KNOWLEDGE.md`
 - Summary: Added the Visual Board route, shared bundled dictionary state, worker-based log analysis, exact-ID lifecycle grouping, sequence/latency/price/order/diagnostic views, on-demand message detail, tests, and a production local-only CSP. Preserved the existing Message Analyzer as the root route.
