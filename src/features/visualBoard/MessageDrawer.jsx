@@ -84,9 +84,9 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Message ${record.id} details`}>
+    <div className="fixed inset-0 z-50 isolate flex justify-end" role="dialog" aria-modal="true" aria-label={`Message ${record.id} details`}>
       <button type="button" aria-label="Close message details" className="absolute inset-0 bg-slate-950/35" onClick={onClose} />
-      <aside className="relative flex h-full w-full max-w-3xl flex-col bg-slate-50 shadow-2xl">
+      <aside className="relative isolate flex h-full w-full max-w-3xl flex-col bg-slate-50 shadow-2xl">
         <header className="border-b border-slate-200 bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -128,7 +128,7 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
           )}
         </div>
 
-        <div className="flex-1 overflow-auto overscroll-contain p-5">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-5 [contain:layout_paint]">
           {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           {isLoading && !error && <div className="flex h-48 items-center justify-center text-sm text-slate-400">Reading message from local worker memory…</div>}
           {!isLoading && tab === 'pretty' && (

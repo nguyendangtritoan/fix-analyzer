@@ -93,6 +93,7 @@ No backend exists. Confidential imported content must remain in the current brow
 - Diagnostics include skipped lines, sequence gaps/resets, rejects, unmatched orders, capture-lag anomalies, and FIX envelope mismatches.
 - `BodyLength(9)` and `CheckSum(10)` are validated only when real SOH framing is available.
 - The sequence board uses fixed-row windowing implemented in project code; no virtualization package was added. Scroll events update React only when the overscanned start/end row window changes, and rows use static absolute positions instead of transformed compositor layers.
+- Long message tables and the sequence board avoid hover-state repainting inside moving scroll surfaces. Their scroll regions use layout/paint containment, and message-table rows remain statically positioned so browser compositing work stays bounded.
 - The sequence board can project up to six FIX tags as separate compact columns. Repeated tags from repeating groups remain in message order within their column, and the board scrolls horizontally when the selected fields exceed the viewport.
 - Flow full-screen mode covers the app chrome and group explorer, keeps the active toolbar/filters and projected fields, lets the sequence board consume the remaining viewport, and preserves message-drawer behavior above the focused workspace.
 - The detected-groups explorer renders groups in pages, defaults to 25 rows, and supports 10, 25, 50, or 100 groups per page. Search and type filters reset it to the first page.
@@ -134,8 +135,15 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - A 100 MB input can still consume several times that amount in transient browser/worker memory; keep compact records free of raw lines and avoid unnecessary source copies.
 - Diff alignment remains key-path based, so complex repeating-group reorder scenarios may be noisy.
 - `src/App.css` is unused Vite starter CSS.
+- Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+### 2026-08-02 - Eliminate Remaining Scroll Paint Flicker
+- Files: `src/components/features/SingleView.jsx`, `src/features/visualBoard/MessageDrawer.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Removed hover-driven row repainting and positioned table rows from moving message content, isolated the drawer's stacking context, and contained layout/paint work inside both primary scroll surfaces.
+- Behavior Impact: Long pretty-message tables and the Flow list no longer flash row backgrounds as content moves beneath a stationary pointer. Selected/highlighted rows remain visible, and Flow rows retain keyboard focus feedback.
+- Verification: A local 250-instance market-data stress message produced 1,012 pretty-table rows and 9,164 drawer descendants. Instrumentation confirmed scrolling caused zero `SingleView` rerenders, narrowing the issue to CSS painting. After the change, hover-sensitive rows fell from 761 to zero, positioned table rows fell to zero, both scroll regions reported `contain: layout paint`, and 30 rapid alternating wheel gestures kept all 1,012 rows continuously rendered without blank or flashing regions. `npm test` passed 16 tests; `npm run lint`, `npm run build`, `npm run verify:security`, browser console inspection, and `git diff --check` passed.
+
 ### 2026-08-02 - Add Full-Screen Flow Workspace
 - Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`
 - Summary: Added an app-level full-screen toggle for Flow and made the sequence board fill the remaining focused-workspace height.

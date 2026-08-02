@@ -68,7 +68,7 @@ const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, 
 
   return (
     <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${fillHeight ? 'h-full min-h-0' : ''}`}>
-      <div ref={scrollRef} onScroll={event => updateVisibleRange(event.currentTarget.scrollTop, event.currentTarget.clientHeight)} className={`relative overflow-auto overscroll-contain ${fillHeight ? 'h-full' : 'h-[685px]'}`} tabIndex="0" aria-label={`Sequence of ${formatInteger(records.length)} FIX messages`}>
+      <div ref={scrollRef} onScroll={event => updateVisibleRange(event.currentTarget.scrollTop, event.currentTarget.clientHeight)} className={`relative overflow-auto overscroll-contain [contain:layout_paint] ${fillHeight ? 'h-full' : 'h-[685px]'}`} tabIndex="0" aria-label={`Sequence of ${formatInteger(records.length)} FIX messages`}>
         <div
           className="sticky top-0 z-20 grid items-center gap-3 border-b border-slate-200 bg-slate-800 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-300"
           style={{ gridTemplateColumns, height: `${HEADER_HEIGHT}px`, minWidth: `${boardMinWidth}px` }}
@@ -93,7 +93,7 @@ const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, 
                 key={record.id}
                 type="button"
                 onClick={() => onSelect(record.id)}
-                className={`absolute left-0 grid w-full items-center gap-3 border-b px-4 text-left ${selected ? 'border-blue-200 bg-blue-50' : 'border-slate-100 hover:bg-slate-50'}`}
+                className={`absolute left-0 grid w-full items-center gap-3 border-b px-4 text-left focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${selected ? 'border-blue-200 bg-blue-50' : 'border-slate-100'}`}
                 style={{ gridTemplateColumns, height: `${ROW_HEIGHT}px`, top: `${index * ROW_HEIGHT}px` }}
               >
                 <span className="font-mono text-[11px] text-slate-500">{formatTimeOnly(record.eventTimestampMs)}</span>

@@ -43,12 +43,12 @@ const getIndentStyle = (depth, enabled, offset = 0) => (
 );
 
 const getRowClass = (tag, highlightedTags) => (
-  getTagHighlightClass(tag, highlightedTags) || 'hover:bg-slate-50'
+  getTagHighlightClass(tag, highlightedTags) || ''
 );
 
 const LeafRow = ({ node, depth, tags, enums, groupIndentEnabled, highlightedTags, onTagClick }) => (
   <tr
-    className={`${getRowClass(node.tag, highlightedTags)} cursor-pointer border-b border-gray-50/50 relative group`}
+    className={`${getRowClass(node.tag, highlightedTags)} cursor-pointer border-b border-slate-100`}
     onClick={() => onTagClick?.(node.tag)}
   >
     <td className="px-4 py-2 whitespace-nowrap relative min-w-[200px]">
@@ -76,7 +76,7 @@ const GroupRow = ({ node, depth, tags, enums, groupIndentEnabled, highlightedTag
   return (
     <>
       <tr
-        className={`${getRowClass(node.tag, highlightedTags)} cursor-pointer border-b border-gray-100 relative`}
+        className={`${getRowClass(node.tag, highlightedTags)} cursor-pointer border-b border-slate-100`}
         onClick={() => onTagClick?.(node.tag)}
       >
         <td className="px-4 py-2 whitespace-nowrap relative min-w-[200px]">
