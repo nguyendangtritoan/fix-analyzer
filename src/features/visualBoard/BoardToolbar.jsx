@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
 import { Clock3, Filter, Search, SlidersHorizontal, Tag, X } from 'lucide-react';
+import { MAX_PROJECTED_FIELDS, normalizeFieldTags } from './fieldProjection';
 
-const BoardToolbar = ({ filters, onFiltersChange, messageTypes, fieldTag, onFieldApply, fieldLoading }) => {
-  const [fieldInput, setFieldInput] = useState(fieldTag || '');
+const BoardToolbar = ({ filters, onFiltersChange, messageTypes, fieldTags, onFieldsApply, fieldLoading }) => {
+  const [fieldInput, setFieldInput] = useState(fieldTags.join(', '));
+  const requestedFieldTags = normalizeFieldTags(fieldInput);
 
   const update = patch => onFiltersChange({ ...filters, ...patch });
+  const applyFields = () => {
+    setFieldInput(requestedFieldTags.join(', '));
+    onFieldsApply(requestedFieldTags);
+  };
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -64,11 +70,21 @@ const BoardToolbar = ({ filters, onFiltersChange, messageTypes, fieldTag, onFiel
             <option value="gap">Inter-arrival gap</option>
           </select>
         </label>
-        <div className="flex items-center rounded-lg border border-slate-200 bg-white">
+        <div className="flex items-center rounded-lg border border-slate-200 bg-white" title={`Show up to ${MAX_PROJECTED_FIELDS} FIX tags as separate columns. Separate tags with commas or spaces.`}>
           <Tag className="ml-2.5 text-slate-400" size={13} />
-          <input value={fieldInput} onChange={event => setFieldInput(event.target.value.replace(/\D/g, ''))} className="w-20 px-2 py-2 text-xs outline-none" placeholder="Field tag" inputMode="numeric" />
-          {fieldTag && <button type="button" onClick={() => { setFieldInput(''); onFieldApply(''); }} className="p-1 text-slate-400 hover:text-slate-700" aria-label="Clear selected field"><X size={13} /></button>}
-          <button type="button" onClick={() => onFieldApply(fieldInput)} disabled={!fieldInput || fieldLoading} className="m-1 rounded bg-slate-800 px-2.5 py-1 text-[10px] font-bold text-white disabled:opacity-40">{fieldLoading ? 'Reading…' : 'Show'}</button>
+          <input
+            value={fieldInput}
+            onChange={event => setFieldInput(event.target.value.replace(/[^\d,\s]/g, ''))}
+            className="w-40 px-2 py-2 text-xs outline-none"
+            placeholder="Tags: 55, 270, 271"
+            inputMode="numeric"
+            aria-label="FIX tags to show"
+            onKeyDown={event => {
+              if (event.key === 'Enter' && requestedFieldTags.length && !fieldLoading) applyFields();
+            }}
+          />
+          {fieldTags.length > 0 && <button type="button" onClick={() => { setFieldInput(''); onFieldsApply([]); }} className="p-1 text-slate-400 hover:text-slate-700" aria-label="Clear selected fields"><X size={13} /></button>}
+          <button type="button" onClick={applyFields} disabled={!requestedFieldTags.length || fieldLoading} className="m-1 rounded bg-slate-800 px-2.5 py-1 text-[10px] font-bold text-white disabled:opacity-40">{fieldLoading ? 'Reading…' : 'Show'}</button>
         </div>
       </div>
     </div>

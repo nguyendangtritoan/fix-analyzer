@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-08-01
+Last Updated: 2026-08-02
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with two browser-only workflows:
@@ -33,7 +33,8 @@ No backend exists. Confidential imported content must remain in the current brow
 - `src/pages/MessageAnalyzerPage.jsx`: original multi-message parse/diff workflow.
 - `src/pages/VisualBoardPage.jsx`: dashboard orchestration and result filters/tabs.
 - `src/features/visualBoard/logAnalysis.js`: pure log parsing, exact-ID correlation, grouping, statistics, latency, price/order projections, and diagnostics.
-- `src/features/visualBoard/visualBoard.worker.js`: owns selected file/source text and serves compact results, message details, and arbitrary-field queries.
+- `src/features/visualBoard/visualBoard.worker.js`: owns selected file/source text and serves compact results, message details, and multi-field projection queries.
+- `src/features/visualBoard/fieldProjection.js`: normalizes requested projection tags and preserves every ordered occurrence of repeated tags.
 - `src/features/visualBoard/useVisualBoardWorker.js`: worker lifecycle, cancellation, input validation, and 100 MB safety limit.
 - `src/features/visualBoard/*.jsx`: importer, group explorer, virtual sequence board, message drawer, and analysis panels.
 - `src/utils/parsers.js`: individual-message parsing and QuickFIX XML dictionary parsing/grouping.
@@ -67,7 +68,7 @@ No backend exists. Confidential imported content must remain in the current brow
 3. The Web Worker reads the `File`, parses log-prefix metadata and FIX pairs, and keeps one source string plus message byte/character offsets.
 4. The main thread receives compact records without raw log lines.
 5. Selecting a message asks the worker for the original line and duplicate-preserving pairs on demand.
-6. Arbitrary-field projection asks the worker to scan the retained source for one numeric tag.
+6. Field projection asks the worker to scan the retained source once for up to six numeric tags and return every ordered occurrence of each tag.
 7. Clear, cancel, route teardown, reload, or tab close terminates the worker and releases its dataset.
 
 ## Visual Board Parsing and Correlation
@@ -91,7 +92,9 @@ No backend exists. Confidential imported content must remain in the current brow
 - Orders table enriches orders with matching executions, status, IDs, price/quantity, and round-trip latency.
 - Diagnostics include skipped lines, sequence gaps/resets, rejects, unmatched orders, capture-lag anomalies, and FIX envelope mismatches.
 - `BodyLength(9)` and `CheckSum(10)` are validated only when real SOH framing is available.
-- The sequence board uses fixed-row windowing implemented in project code; no virtualization package was added.
+- The sequence board uses fixed-row windowing implemented in project code; no virtualization package was added. Scroll events update React only when the overscanned start/end row window changes, and rows use static absolute positions instead of transformed compositor layers.
+- The sequence board can project up to six FIX tags as separate compact columns. Repeated tags from repeating groups remain in message order within their column, and the board scrolls horizontally when the selected fields exceed the viewport.
+- Flow full-screen mode covers the app chrome and group explorer, keeps the active toolbar/filters and projected fields, lets the sequence board consume the remaining viewport, and preserves message-drawer behavior above the focused workspace.
 - The detected-groups explorer renders groups in pages, defaults to 25 rows, and supports 10, 25, 50, or 100 groups per page. Search and type filters reset it to the first page.
 - Flow filters include an inclusive UTC time-of-day range with second/millisecond precision, open-ended bounds, and overnight ranges when the start is later than the end.
 
@@ -115,12 +118,12 @@ Common commands:
 
 The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check`.
 
-## Current Baseline (2026-08-01)
-- Fourteen Visual Board parser/correlation, pagination, and time-range tests pass.
+## Current Baseline (2026-08-02)
+- Sixteen Visual Board parser/correlation, pagination, time-range, and field-projection tests pass.
 - ESLint passes.
 - Production build passes and includes the strict CSP.
 - Local-only security verification passes.
-- Browser QA covers import example, all result tabs, the detail/raw drawer, arbitrary field projection, and clear-data behavior.
+- Browser QA covers import example, all result tabs, the detail/raw drawer, field projection, and clear-data behavior.
 - The embedded FIX XML makes the main bundle exceed Vite's default 500 kB warning threshold; this is an intentional no-runtime-fetch tradeoff.
 
 ## Known Risks and Gotchas
@@ -133,6 +136,30 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - `src/App.css` is unused Vite starter CSS.
 
 ## Change Log
+### 2026-08-02 - Add Full-Screen Flow Workspace
+- Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added an app-level full-screen toggle for Flow and made the sequence board fill the remaining focused-workspace height.
+- Behavior Impact: Users can isolate the Flow toolbar, status, and message list from the app header, dataset tabs, and group explorer without losing active filters or projected fields. The message drawer remains above full screen; the exit button or Escape restores the previous page position.
+- Verification: Browser QA confirmed the focused region covers the full 1280×720 viewport above the app header, preserves the `D` filter and `55/54/38` projections, resizes the sequence board, keeps the message drawer above it, handles layered Escape correctly, and restores the original page position/styles on exit. `npm test` passed 16 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
+### 2026-08-02 - Stabilize Sequence Board Scrolling
+- Files: `src/features/visualBoard/SequenceBoard.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Stopped unchanged scroll events from re-rendering the virtualized message list, replaced transformed rows with static absolute positions, removed row color transitions, contained list overscroll, and avoided nested field scrollers when projected values already fit.
+- Behavior Impact: The Flow message list remains visually stable while wheel/trackpad scrolling. Hover feedback and virtualization remain available; projected cells with more than four repeated values still scroll internally when required.
+- Verification: Browser instrumentation on the supplied local log reduced four small scroll gestures from nine full list renders to zero when the visible row window was unchanged. The 19-message filtered case had zero transformed rows, row transitions, or unnecessary nested scrollers. A 10,400 px scroll through all 57,260 messages updated the window correctly while keeping 31 rows mounted. `npm test` passed 16 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
+### 2026-08-02 - Stabilize Message Drawer Scrolling
+- Files: `src/features/visualBoard/MessageDrawer.jsx`, `src/components/features/SingleView.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Removed the full-screen backdrop blur and per-row color transitions from the message drawer, contained overscroll inside its pretty/raw content region, and locked background-page scrolling while the drawer is open.
+- Behavior Impact: Scrolling a long single-message view no longer continuously recomposites a blurred page, restarts hover transitions as rows cross the pointer, or moves the Visual Board behind the modal at its boundaries. Tag highlighting, hover feedback, grouped rows, and drawer navigation remain available.
+- Verification: Browser regression testing on a 73-row repeating-group message confirmed zero transitioning rows, no backdrop filter, contained overscroll, an invariant background viewport across both scroll boundaries, and complete style/page-position restoration on close. `npm test` passed 16 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
+### 2026-08-02 - Project Multiple Fields and Repeated Values
+- Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/BoardToolbar.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `src/features/visualBoard/useVisualBoardWorker.js`, `src/features/visualBoard/visualBoard.worker.js`, `src/features/visualBoard/fieldProjection.js`, `src/features/visualBoard/fieldProjection.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Replaced the single-value field query with a local multi-field projection that returns all occurrences of up to six requested numeric FIX tags.
+- Behavior Impact: Users can enter comma- or space-separated tags, see each tag in a compact column headed only by its number, and inspect every repeated value (such as all `270` prices in a market-data repeating group) in original message order. Wide projections use synchronized horizontal scrolling without changing the privacy model or adding dependencies.
+- Verification: `npm test` passed 16 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
 ### 2026-08-01 - Remove Visual Board Page Header
 - Files: `src/pages/VisualBoardPage.jsx`, `PROJECT_KNOWLEDGE.md`
 - Summary: Removed the Visual Board page header, including its title, eyebrow, explanatory subtitle, and duplicate browser-memory badge.

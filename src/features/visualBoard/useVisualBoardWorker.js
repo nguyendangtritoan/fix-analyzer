@@ -47,7 +47,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
         onResultRef.current?.(message.result);
       } else if (message.type === 'error') {
         setState(current => ({ ...current, status: 'error', progress: null, error: message.message }));
-      } else if (message.type === 'message-detail' || message.type === 'field-result') {
+      } else if (message.type === 'message-detail' || message.type === 'fields-result') {
         const pending = pendingRequestsRef.current.get(message.requestId);
         if (pending) {
           pending.resolve(message);
@@ -152,7 +152,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
   }), []);
 
   const getMessage = useCallback(id => request({ type: 'get-message', id }), [request]);
-  const queryField = useCallback(tag => request({ type: 'query-field', tag: String(tag) }), [request]);
+  const queryFields = useCallback(tags => request({ type: 'query-fields', tags: tags.map(String) }), [request]);
 
   return {
     ...state,
@@ -161,6 +161,6 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
     cancel,
     clear,
     getMessage,
-    queryField,
+    queryFields,
   };
 };

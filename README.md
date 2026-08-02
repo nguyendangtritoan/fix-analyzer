@@ -19,8 +19,9 @@ Open `#/visual-board` or use the top navigation. The board accepts pasted text a
 - Correlates messages into detected RFQ, order, market-data, and session lifecycles.
 - Uses exact business identifiers such as `ClOrdID(11)`, `OrigClOrdID(41)`, `OrderID(37)`, `QuoteReqID(131)`, `QuoteID(117)`, and session-scoped `MDReqID(262)`.
 - Shows virtualized chronological flows, direction, message type, common IDs, capture lag, and matched `D → 8` round-trip latency.
+- Expands the Flow workspace into a focused full-screen view while preserving filters, field projections, and message details.
 - Opens any row as a dictionary-enriched message drawer while preserving duplicate fields and the original log line.
-- Projects any numeric FIX field onto the sequence board.
+- Projects up to six numeric FIX tags onto separate sequence-board columns while preserving every repeated occurrence.
 - Summarizes message types, directions, sessions, groups, latency, latest quote/market-data prices, orders, executions, rejects, sequence gaps, and envelope checks.
 - Reports skipped input lines rather than silently treating them as FIX messages.
 

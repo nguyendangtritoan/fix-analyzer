@@ -1,4 +1,5 @@
-import { analyzeLogText, extractTagValue, parseFixPairs } from './logAnalysis';
+import { collectProjectedFieldValues, normalizeFieldTags } from './fieldProjection';
+import { analyzeLogText, parseFixPairs } from './logAnalysis';
 
 const messageOffsets = new Map();
 let datasetText = '';
@@ -47,17 +48,18 @@ self.onmessage = async event => {
         raw,
         pairs: raw ? parseFixPairs(raw) : [],
       });
-    } else if (message.type === 'query-field') {
+    } else if (message.type === 'query-fields') {
+      const tags = normalizeFieldTags(message.tags);
       const values = [];
       for (const [id, offsets] of messageOffsets) {
         const raw = datasetText.slice(offsets[0], offsets[1]);
-        const value = extractTagValue(raw, message.tag);
-        if (value !== undefined) values.push([id, value]);
+        const projected = collectProjectedFieldValues(parseFixPairs(raw), tags);
+        if (Object.keys(projected).length) values.push([id, projected]);
       }
       self.postMessage({
-        type: 'field-result',
+        type: 'fields-result',
         requestId: message.requestId,
-        tag: message.tag,
+        tags,
         values,
       });
     } else if (message.type === 'clear') {

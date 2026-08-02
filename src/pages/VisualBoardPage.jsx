@@ -1,10 +1,12 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   CircleDollarSign,
   FileSearch,
   LayoutDashboard,
   ListTree,
+  Maximize2,
+  Minimize2,
   ShoppingCart,
   Trash2,
 } from 'lucide-react';
@@ -48,9 +50,42 @@ const VisualBoardPage = () => {
   const [selectedGroupId, setSelectedGroupId] = useState('all');
   const [selectedRecordId, setSelectedRecordId] = useState(null);
   const [filters, setFilters] = useState(INITIAL_FILTERS);
-  const [fieldTag, setFieldTag] = useState('');
+  const [fieldTags, setFieldTags] = useState([]);
   const [fieldValues, setFieldValues] = useState(new Map());
   const [fieldLoading, setFieldLoading] = useState(false);
+  const [isFlowFullscreen, setIsFlowFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isFlowFullscreen) return undefined;
+
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyWidth = document.body.style.width;
+    const handleKeyDown = event => {
+      if (event.key === 'Escape' && !document.querySelector('[aria-modal="true"]')) setIsFlowFullscreen(false);
+    };
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.documentElement.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.width = previousBodyWidth;
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [isFlowFullscreen]);
 
   const handleResult = useCallback(result => {
     const versions = Object.keys(result.summary.versionCounts).filter(version => version.startsWith('FIX.'));
@@ -59,8 +94,9 @@ const VisualBoardPage = () => {
     setSelectedGroupId('all');
     setSelectedRecordId(null);
     setFilters(INITIAL_FILTERS);
-    setFieldTag('');
+    setFieldTags([]);
     setFieldValues(new Map());
+    setIsFlowFullscreen(false);
   }, [autoDetectBeginString]);
 
   const worker = useVisualBoardWorker({ onResult: handleResult });
@@ -102,16 +138,16 @@ const VisualBoardPage = () => {
     setSelectedRecordId(null);
   };
 
-  const handleFieldApply = async tag => {
-    if (!tag) {
-      setFieldTag('');
+  const handleFieldsApply = async tags => {
+    if (!tags.length) {
+      setFieldTags([]);
       setFieldValues(new Map());
       return;
     }
     setFieldLoading(true);
     try {
-      const response = await worker.queryField(tag);
-      setFieldTag(String(tag));
+      const response = await worker.queryFields(tags);
+      setFieldTags(response.tags);
       setFieldValues(new Map(response.values));
     } finally {
       setFieldLoading(false);
@@ -122,8 +158,9 @@ const VisualBoardPage = () => {
     worker.clear();
     setSelectedRecordId(null);
     setSelectedGroupId('all');
-    setFieldTag('');
+    setFieldTags([]);
     setFieldValues(new Map());
+    setIsFlowFullscreen(false);
   };
 
   const navigateSelectedRecord = useCallback(direction => {
@@ -182,20 +219,33 @@ const VisualBoardPage = () => {
             <section className="min-w-0">
               {activeTab === 'overview' && <OverviewPanel result={result} />}
               {activeTab === 'flow' && (
-                <div className="space-y-3">
+                <div className={isFlowFullscreen ? 'fixed inset-0 z-[45] flex min-h-0 flex-col gap-3 overflow-hidden bg-slate-50 p-3 sm:p-4' : 'space-y-3'} aria-label={isFlowFullscreen ? 'Full-screen message flow' : undefined}>
                   <BoardToolbar
                     filters={filters}
                     onFiltersChange={setFilters}
                     messageTypes={Object.keys(result.summary.messageTypeCounts).sort()}
-                    fieldTag={fieldTag}
-                    onFieldApply={handleFieldApply}
+                    fieldTags={fieldTags}
+                    onFieldsApply={handleFieldsApply}
                     fieldLoading={fieldLoading}
                   />
-                  <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-400">
                     <span>{formatInteger(filteredRecords.length)} of {formatInteger(result.summary.messageCount)} messages visible</span>
-                    <span>{filters.latencyMode === 'capture' ? 'log timestamp − SendingTime(52)' : filters.latencyMode === 'roundtrip' ? 'matched response − request' : 'current − previous visible message'}</span>
+                    <div className="flex items-center gap-3">
+                      <span>{filters.latencyMode === 'capture' ? 'log timestamp − SendingTime(52)' : filters.latencyMode === 'roundtrip' ? 'matched response − request' : 'current − previous visible message'}</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsFlowFullscreen(current => !current)}
+                        aria-pressed={isFlowFullscreen}
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-bold text-slate-600 shadow-sm hover:border-blue-300 hover:text-blue-700"
+                      >
+                        {isFlowFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                        {isFlowFullscreen ? 'Exit full screen' : 'Full screen'}
+                      </button>
+                    </div>
                   </div>
-                  <SequenceBoard records={filteredRecords} selectedId={selectedRecordId} onSelect={setSelectedRecordId} latencyMode={filters.latencyMode} fieldTag={fieldTag} fieldValues={fieldValues} />
+                  <div className={isFlowFullscreen ? 'min-h-0 flex-1' : undefined}>
+                    <SequenceBoard records={filteredRecords} selectedId={selectedRecordId} onSelect={setSelectedRecordId} latencyMode={filters.latencyMode} fieldTags={fieldTags} fieldValues={fieldValues} fillHeight={isFlowFullscreen} />
+                  </div>
                 </div>
               )}
               {activeTab === 'latency' && <LatencyPanel latency={result.latency} onSelectMessage={setSelectedRecordId} />}

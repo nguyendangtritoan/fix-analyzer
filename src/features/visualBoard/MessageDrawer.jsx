@@ -43,6 +43,29 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [canGoNext, canGoPrevious, onClose, onNavigate]);
 
+  useEffect(() => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyPosition = document.body.style.position;
+    const previousBodyTop = document.body.style.top;
+    const previousBodyWidth = document.body.style.width;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    return () => {
+      document.documentElement.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.position = previousBodyPosition;
+      document.body.style.top = previousBodyTop;
+      document.body.style.width = previousBodyWidth;
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, []);
+
   if (!record) return null;
 
   const isLoading = detail?.id !== record.id;
@@ -62,7 +85,7 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Message ${record.id} details`}>
-      <button type="button" aria-label="Close message details" className="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]" onClick={onClose} />
+      <button type="button" aria-label="Close message details" className="absolute inset-0 bg-slate-950/35" onClick={onClose} />
       <aside className="relative flex h-full w-full max-w-3xl flex-col bg-slate-50 shadow-2xl">
         <header className="border-b border-slate-200 bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-4">
@@ -105,7 +128,7 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
           )}
         </div>
 
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-auto overscroll-contain p-5">
           {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
           {isLoading && !error && <div className="flex h-48 items-center justify-center text-sm text-slate-400">Reading message from local worker memory…</div>}
           {!isLoading && tab === 'pretty' && (
