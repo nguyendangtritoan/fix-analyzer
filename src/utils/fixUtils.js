@@ -23,6 +23,14 @@ export const copyToClipboard = (text) => {
   }
 };
 
+export const writeTextToClipboard = async (text) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return copyToClipboard(text);
+};
+
 export const generateOutput = (data, format, tags) => {
   if (!data || data.length === 0) return "";
   

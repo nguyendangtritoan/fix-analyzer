@@ -17,12 +17,12 @@ const OrdersPanel = ({ rows, onSelectMessage }) => {
   ];
 
   return (
-    <div>
-      <div className="mb-3">
+    <div className="xl:flex xl:h-full xl:min-h-0 xl:flex-col">
+      <div className="mb-3 shrink-0">
         <h3 className="font-bold text-slate-800">Orders and executions</h3>
         <p className="mt-1 text-xs text-slate-500">One row per NewOrderSingle(D), enriched with its correlated ExecutionReport(8) when available.</p>
       </div>
-      <DataTable columns={columns} rows={rows} rowKey="requestMessageId" onRowClick={row => onSelectMessage(row.responseMessageId || row.requestMessageId)} emptyMessage="No NewOrderSingle(D) messages were found." />
+      <DataTable columns={columns} rows={rows} rowKey="requestMessageId" onRowClick={row => onSelectMessage(row.responseMessageId || row.requestMessageId)} emptyMessage="No NewOrderSingle(D) messages were found." fitContainer scrollLabel="Scrollable orders and executions table" />
     </div>
   );
 };

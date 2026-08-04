@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-08-02
+Last Updated: 2026-08-04
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with two browser-only workflows:
@@ -34,10 +34,13 @@ No backend exists. Confidential imported content must remain in the current brow
 - `src/pages/VisualBoardPage.jsx`: dashboard orchestration and result filters/tabs.
 - `src/features/visualBoard/logAnalysis.js`: pure log parsing, exact-ID correlation, grouping, statistics, latency, price/order projections, and diagnostics.
 - `src/features/visualBoard/visualBoard.worker.js`: owns selected file/source text and serves compact results, message details, and multi-field projection queries.
+- `src/features/visualBoard/datasetExport.js`: produces whole-paste or selected-group clipboard text in raw, normalized FIX, readable, and JSON formats while enforcing file-copy scope.
+- `src/features/visualBoard/datasetImport.js`: recognizes copied pretty/bracketed and duplicate-preserving JSON text and reconstructs ordered FIX messages for pasted round trips.
 - `src/features/visualBoard/fieldProjection.js`: normalizes requested projection tags and preserves every ordered occurrence of repeated tags.
 - `src/features/visualBoard/useVisualBoardWorker.js`: worker lifecycle, cancellation, input validation, and 100 MB safety limit.
 - `src/features/visualBoard/*.jsx`: importer, group explorer, virtual sequence board, message drawer, and analysis panels.
 - `src/utils/parsers.js`: individual-message parsing and QuickFIX XML dictionary parsing/grouping.
+- `src/utils/fixDelimiter.js`: shared automatic FIX field-delimiter detection and lossless tokenization for both routes.
 - `src/components/features/SingleView.jsx`: dictionary-enriched grouped message rendering, reused by the drawer.
 - `src/constants/dictionarySources.js`: metadata for FIX 4.0–4.4 bundled dictionaries.
 - `vite.config.js`: embeds dictionary XML at build time and injects the production CSP.
@@ -55,8 +58,7 @@ No backend exists. Confidential imported content must remain in the current brow
 `parseFixMessage(raw)` heuristic order:
 1. Bracketed format detection (`<35> MsgType = D`).
 2. Columnar row detection.
-3. Delimited parsing after normalizing pipe and `^A` to SOH.
-4. Best-effort regex for space-separated `tag=value` tokens.
+3. Header-guided automatic delimiter detection, with repeated-boundary inference for headerless inputs and a best-effort whitespace fallback.
 
 `parseQuickFixXml(xml)` merges definitions into defaults and produces tags, enums, field types, message names, and recursive repeating-group schemas. Invalid XML produces a user-facing error.
 
@@ -65,15 +67,17 @@ No backend exists. Confidential imported content must remain in the current brow
 ## Visual Board Data Flow
 1. `ImportPanel` accepts pasted text or uncompressed `.log`, `.txt`, and `.fix` files up to 100 MB.
 2. Compressed extensions (`bz2`, `gz`, `zip`, `7z`, `rar`, `xz`, `zst`) are rejected with instructions to decompress locally. No decompression dependency is included.
-3. The Web Worker reads the `File`, parses log-prefix metadata and FIX pairs, and keeps one source string plus message byte/character offsets.
+3. The Web Worker reads the `File` or pasted text, parses log-prefix metadata and FIX pairs, and keeps the analysis source plus message character offsets. A pasted pretty/JSON export is normalized into one FIX message per line while its exact original paste is retained for raw copy-all.
 4. The main thread receives compact records without raw log lines.
 5. Selecting a message asks the worker for the original line and duplicate-preserving pairs on demand.
 6. Field projection asks the worker to scan the retained source once for up to six numeric tags and return every ordered occurrence of each tag.
-7. Clear, cancel, route teardown, reload, or tab close terminates the worker and releases its dataset.
+7. Copy asks the worker to format either the complete pasted source or the selected detected group's message offsets. File sources require a selected group and cannot be copied wholesale. Every generated format can be pasted back: raw, pipe, and SOH parse directly; pretty/bracketed and JSON are reconstructed locally with field order and duplicates preserved.
+8. Clear, cancel, route teardown, reload, or tab close terminates the worker and releases its dataset.
 
 ## Visual Board Parsing and Correlation
 - Prefix parsing extracts timestamp, incoming/outgoing direction, and common `sender->target:qualifier` session labels.
-- SOH, `^A`, pipe, and best-effort whitespace FIX bodies are supported.
+- A consistent delimiter is inferred per FIX message from the `BeginString(8)` → `BodyLength(9)` boundary. Arbitrary single- or multi-character separators are supported, including control characters, punctuation, text/Unicode markers, and numeric markers. Headerless input uses repeated-boundary inference; whitespace-separated fields retain a best-effort fallback.
+- Tokenization only treats the detected delimiter as a boundary when it is immediately followed by a numeric `tag=`, preserving spaces, equals signs, and delimiter-like punctuation inside field values.
 - Duplicate FIX fields are preserved in ordered detail pairs; an index also exposes convenient first values.
 - Correlation uses disjoint-set graph merging with exact IDs only:
   - `ClOrdID(11)` / `OrigClOrdID(41)`
@@ -96,8 +100,11 @@ No backend exists. Confidential imported content must remain in the current brow
 - Long message tables and the sequence board avoid hover-state repainting inside moving scroll surfaces. Their scroll regions use layout/paint containment, and message-table rows remain statically positioned so browser compositing work stays bounded.
 - The sequence board can project up to six FIX tags as separate compact columns. Repeated tags from repeating groups remain in message order within their column, and the board scrolls horizontally when the selected fields exceed the viewport.
 - Flow full-screen mode covers the app chrome and group explorer, keeps the active toolbar/filters and projected fields, lets the sequence board consume the remaining viewport, and preserves message-drawer behavior above the focused workspace.
+- The loaded desktop dashboard uses a viewport-bounded two-column grid beneath the sticky app header. The removed source-summary card no longer consumes vertical space; group cards and active right-side analysis content scroll independently while search, pagination, tabs, Flow filters, analysis headings, and page position remain fixed. Quotes & Prices and Orders scroll inside their tables; Diagnostics keeps its summary cards and section headings visible while the detail lists scroll.
+- Flow renders stable local/counterparty positions: outgoing messages point right (`local → remote`) and incoming messages point left (`local ← remote`) instead of swapping endpoints while always pointing right.
 - The detected-groups explorer renders groups in pages, defaults to 25 rows, and supports 10, 25, 50, or 100 groups per page. Search and type filters reset it to the first page.
 - Flow filters include an inclusive UTC time-of-day range with second/millisecond precision, open-ended bounds, and overnight ranges when the start is later than the end.
+- The loaded-dataset toolbar copies an entire pasted dataset or one selected detected group as exact original text, normalized pipe or SOH FIX, readable bracketed fields, or duplicate-preserving JSON. For uploaded files, the control stays disabled until a detected group is selected and copies only that group's original source lines or parsed messages.
 
 ## Local-Only Security Contract
 - Application source must not call `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, or `navigator.sendBeacon`.
@@ -105,6 +112,7 @@ No backend exists. Confidential imported content must remain in the current brow
 - Production CSP includes `connect-src 'none'`, `worker-src 'self' blob:`, `object-src 'none'`, `form-action 'none'`, and `frame-src 'none'`.
 - `npm run verify:security` enforces the source/API, dependency, and CSP parts of this contract.
 - Imported data is not placed in URL/hash, localStorage, sessionStorage, IndexedDB, cookies, or service-worker caches.
+- Clipboard output is created only after the user explicitly chooses a format; it remains a browser-local action and is never sent by application code.
 - The static host and browser extensions are outside the app's trust boundary; README describes this limitation explicitly.
 
 ## Dev and Operations
@@ -119,8 +127,8 @@ Common commands:
 
 The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check`.
 
-## Current Baseline (2026-08-02)
-- Sixteen Visual Board parser/correlation, pagination, time-range, and field-projection tests pass.
+## Current Baseline (2026-08-04)
+- Forty-nine parser/correlation, delimiter, pagination, time-range, field-projection, dataset-export, copied-format import, and message-direction tests pass.
 - ESLint passes.
 - Production build passes and includes the strict CSP.
 - Local-only security verification passes.
@@ -138,6 +146,36 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+### 2026-08-04 - Align Analysis Scrolling and Flow Directions
+- Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/DataTable.jsx`, `src/features/visualBoard/PricesPanel.jsx`, `src/features/visualBoard/OrdersPanel.jsx`, `src/features/visualBoard/DiagnosticsPanel.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `src/features/visualBoard/messageDirection.js`, `src/features/visualBoard/messageDirection.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Made Quotes & Prices, Orders, and Diagnostics own their bounded data scrollers like Flow, and gave incoming and outgoing message paths opposite arrow directions with stable endpoint positions.
+- Behavior Impact: Table and diagnostic headings remain visible while their rows or detail lists scroll inside the viewport-fitted right frame. Flow now displays outgoing messages as `local → remote` and incoming messages as `local ← remote`; unknown directions preserve parsed order. The new scroll regions are keyboard focusable and visibly focused.
+- Verification: `npm test` passed 49 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Local browser QA at 1280×720 confirmed 467px inner scrollers for Quotes and Orders and a 271px actionable Diagnostics scroller; moving each inner scroller left its heading and page scroll position unchanged. Flow rendered both left- and right-pointing arrows with no document scrolling.
+
+### 2026-08-04 - Fit Loaded Visual Board to the Viewport
+- Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/GroupExplorer.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`, `design-qa.md`
+- Summary: Removed the loaded-file summary card and converted the desktop result workspace into a viewport-height two-column layout with independently scrolling content regions.
+- Behavior Impact: Users no longer scroll the whole page to reach detected groups or Flow messages. Group search/all/ungrouped controls and pagination stay fixed around a scrollable card list; the right tab bar and Flow controls stay fixed above a sequence board that fills and scrolls within the remaining height. Other analysis tabs scroll inside the right frame when needed, while smaller layouts retain normal document flow.
+- Verification: `npm test` passed 46 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Local browser QA at a `2048 x 1117` CSS viewport with the supplied 57,260-message log measured an exact `1117px` document height, independently scrolled the group list to `700px` and Flow board to `900px` with page scroll fixed at zero, and found no console errors. `design-qa.md` records a passed visual comparison.
+
+### 2026-08-04 - Re-import Copied Visual Board Formats
+- Files: `src/features/visualBoard/datasetImport.js`, `src/features/visualBoard/datasetImport.test.js`, `src/features/visualBoard/visualBoard.worker.js`, `src/features/visualBoard/ImportPanel.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added worker-side recognition for content produced by the dataset copy menu so copied output can be pasted back into Visual Board and analyzed again.
+- Behavior Impact: Raw, pipe, and SOH copies continue through the normal delimiter parser unchanged. Pretty/bracketed and duplicate-preserving JSON copies are reconstructed as ordered FIX messages, including duplicate tags. The worker retains the exact pasted source separately so `Original / raw` copy-all still returns precisely what the user pasted.
+- Verification: `npm test` passed 46 tests, including pretty/JSON round trips and malformed-input fallbacks; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
+### 2026-08-04 - Copy Pasted Datasets and Selected File Groups
+- Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/DatasetCopyMenu.jsx`, `src/features/visualBoard/datasetExport.js`, `src/features/visualBoard/datasetExport.test.js`, `src/features/visualBoard/logAnalysis.js`, `src/features/visualBoard/useVisualBoardWorker.js`, `src/features/visualBoard/visualBoard.worker.js`, `src/utils/fixUtils.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added on-demand multi-message clipboard export to the loaded Visual Board toolbar, with separate source-kind and selected-group enforcement in the UI and worker.
+- Behavior Impact: Pasted input can be copied in full or by selected detected group; uploaded files can copy only a selected detected group. Users can choose exact original/raw, normalized pipe, SOH, readable bracketed, or duplicate-preserving JSON output. Raw file-group export retains the original selected log lines, including their prefixes.
+- Verification: `npm test` passed 41 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Local browser QA confirmed pasted input exposes enabled whole-dataset formats, file-wide copy is disabled, selecting a detected file group enables `Copy group`, and original/raw group copy reports success.
+
+### 2026-08-04 - Auto-Detect FIX Field Delimiters
+- Files: `src/utils/fixDelimiter.js`, `src/utils/fixDelimiter.test.js`, `src/utils/parsers.js`, `src/features/visualBoard/logAnalysis.js`, `src/features/visualBoard/logAnalysis.test.js`, `src/features/visualBoard/ImportPanel.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Replaced route-specific fixed delimiter lists with one shared, header-guided delimiter detector and boundary-aware tokenizer implemented with standard JavaScript only.
+- Behavior Impact: Message Analyzer and Visual Board now accept consistent arbitrary delimiters such as SOH, `^A`, pipe, semicolon, comma, tab, `::`, `<SOH>`, Unicode, equals, and numeric markers. Delimiter-like characters and spaces inside values are preserved unless followed by a numeric `tag=` boundary.
+- Verification: Dedicated delimiter coverage exercises both application parsers across fifteen delimiter forms, value preservation, headerless inference, and a complete Visual Board log record. `npm test` passed 35 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
 ### 2026-08-02 - Eliminate Remaining Scroll Paint Flicker
 - Files: `src/components/features/SingleView.jsx`, `src/features/visualBoard/MessageDrawer.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `PROJECT_KNOWLEDGE.md`
 - Summary: Removed hover-driven row repainting and positioned table rows from moving message content, isolated the drawer's stacking context, and contained layout/paint work inside both primary scroll surfaces.

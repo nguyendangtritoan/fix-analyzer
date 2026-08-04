@@ -6,7 +6,7 @@ FIX Analyzer is a privacy-first React application for inspecting individual FIX 
 
 ### Message Analyzer
 
-- Parses SOH, `^A`, pipe-delimited, bracketed, columnar, and best-effort space-separated FIX text.
+- Auto-detects consistent FIX field delimiters, including SOH, `^A`, pipe, punctuation, control characters, Unicode, and multi-character markers; bracketed, columnar, and best-effort space-separated text remain supported.
 - Shows a dictionary-enriched, grouped view of one message.
 - Compares two or more messages with aligned fields and repeating groups.
 - Uses bundled FIX 4.0–4.4 QuickFIX dictionaries or a locally selected custom XML dictionary.
@@ -18,12 +18,16 @@ Open `#/visual-board` or use the top navigation. The board accepts pasted text a
 
 - Correlates messages into detected RFQ, order, market-data, and session lifecycles.
 - Uses exact business identifiers such as `ClOrdID(11)`, `OrigClOrdID(41)`, `OrderID(37)`, `QuoteReqID(131)`, `QuoteID(117)`, and session-scoped `MDReqID(262)`.
-- Shows virtualized chronological flows, direction, message type, common IDs, capture lag, and matched `D → 8` round-trip latency.
+- Shows virtualized chronological flows with distinct `→` outgoing and `←` incoming paths, message type, common IDs, capture lag, and matched `D → 8` round-trip latency.
 - Expands the Flow workspace into a focused full-screen view while preserving filters, field projections, and message details.
+- Fits the loaded desktop workspace to the viewport: detected groups and the active Flow, Quotes & Prices, Orders, or Diagnostics content scroll internally without moving the whole page or their panel headings.
 - Opens any row as a dictionary-enriched message drawer while preserving duplicate fields and the original log line.
 - Projects up to six numeric FIX tags onto separate sequence-board columns while preserving every repeated occurrence.
 - Summarizes message types, directions, sessions, groups, latency, latest quote/market-data prices, orders, executions, rejects, sequence gaps, and envelope checks.
 - Reports skipped input lines rather than silently treating them as FIX messages.
+- Uses the same automatic delimiter detection as Message Analyzer, so custom separators work consistently in pasted messages and log lines.
+- Copies an entire pasted dataset or one selected detected group as original/raw, pipe-delimited, SOH-delimited, readable bracketed text, or duplicate-preserving JSON. File imports deliberately expose group copy only, never whole-file copy.
+- Re-imports those copied formats when they are pasted back into Visual Board; pretty/bracketed and JSON exports are normalized locally while raw, pipe, and SOH input remains unchanged.
 
 Compressed files, including `.bz2`, are intentionally unsupported. Decompress confidential logs with a trusted local operating-system tool, then select the resulting plain-text file. No decompression package is included.
 
@@ -33,6 +37,7 @@ Imported content exists only in the current browser tab's memory:
 
 - Log parsing and correlation run in a Web Worker.
 - The worker retains the source text for on-demand details; the main UI receives compact records and source offsets rather than every raw line.
+- Dataset and group exports are generated in the worker only after an explicit copy action, then written to the local browser clipboard without a network request.
 - Clearing the board, closing/reloading the tab, or terminating the worker releases the in-memory dataset.
 - The application does not use `fetch`, XHR, WebSockets, EventSource, beacons, analytics, telemetry, remote fonts, or CDN assets.
 - Standard FIX XML dictionaries are embedded into the JavaScript bundle at build time, so selecting a dictionary does not cause a runtime request.

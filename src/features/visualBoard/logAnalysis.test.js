@@ -38,6 +38,28 @@ test('preserves duplicate FIX fields and finds an arbitrary tag', () => {
   assert.equal(extractTagValue(raw, 270), '1.1');
 });
 
+test('analyzes log records with an auto-detected custom delimiter', () => {
+  const delimiter = '<FIELD>';
+  const raw = [
+    ['8', 'FIX.4.4'], ['9', '100'], ['35', 'D'], ['34', '7'], ['49', 'CLIENT'],
+    ['52', '20260720-08:08:53.705'], ['56', 'VENUE'], ['11', 'CUSTOM-DELIMITER'],
+    ['55', 'EUR/USD'], ['58', 'value containing | and ; punctuation'], ['10', '000'],
+  ].map(([tag, value]) => `${tag}=${value}`).join(delimiter) + delimiter;
+
+  const result = analyzeLogText(line(
+    '20.07.26 08:08:53.710',
+    'outgoing',
+    'FIX.4.4:CLIENT->VENUE:CustomSession',
+    raw,
+  ));
+
+  assert.equal(result.summary.messageCount, 1);
+  assert.deepEqual(result.summary.messageTypeCounts, { D: 1 });
+  assert.equal(result.records[0].fields['11'], 'CUSTOM-DELIMITER');
+  assert.equal(result.records[0].fields['55'], 'EUR/USD');
+  assert.equal(result.records[0].captureLagMs, 5);
+});
+
 test('builds explainable order and market-data groups with distinct latency semantics', () => {
   const execSession = 'FIX.4.4:CLIENT->VENUE:ExecSession';
   const quoteSession = 'FIX.4.4:CLIENT->VENUE:QuoteSession';

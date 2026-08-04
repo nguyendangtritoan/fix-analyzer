@@ -8,6 +8,7 @@ const createInitialState = () => ({
   status: 'idle',
   progress: null,
   sourceName: null,
+  sourceKind: null,
   result: null,
   error: null,
 });
@@ -41,16 +42,23 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
           status: 'ready',
           progress: null,
           sourceName: message.sourceName,
+          sourceKind: message.sourceKind,
           result: message.result,
           error: null,
         });
         onResultRef.current?.(message.result);
       } else if (message.type === 'error') {
         setState(current => ({ ...current, status: 'error', progress: null, error: message.message }));
-      } else if (message.type === 'message-detail' || message.type === 'fields-result') {
+      } else if (message.type === 'message-detail' || message.type === 'fields-result' || message.type === 'dataset-copy-result') {
         const pending = pendingRequestsRef.current.get(message.requestId);
         if (pending) {
           pending.resolve(message);
+          pendingRequestsRef.current.delete(message.requestId);
+        }
+      } else if (message.type === 'request-error') {
+        const pending = pendingRequestsRef.current.get(message.requestId);
+        if (pending) {
+          pending.reject(new Error(message.message));
           pendingRequestsRef.current.delete(message.requestId);
         }
       }
@@ -110,7 +118,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
     }
 
     const worker = resetWorker();
-    setState({ status: 'processing', progress: null, sourceName: file.name, result: null, error: null });
+    setState({ status: 'processing', progress: null, sourceName: file.name, sourceKind: 'file', result: null, error: null });
     worker.postMessage({ type: 'parse-file', file });
     return true;
   }, [resetWorker]);
@@ -130,7 +138,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
     }
 
     const worker = resetWorker();
-    setState({ status: 'processing', progress: null, sourceName, result: null, error: null });
+    setState({ status: 'processing', progress: null, sourceName, sourceKind: 'text', result: null, error: null });
     worker.postMessage({ type: 'parse-text', text, sourceName });
     return true;
   }, [resetWorker]);
@@ -153,6 +161,12 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
 
   const getMessage = useCallback(id => request({ type: 'get-message', id }), [request]);
   const queryFields = useCallback(tags => request({ type: 'query-fields', tags: tags.map(String) }), [request]);
+  const copyDataset = useCallback((format, tags, messageIds = null) => request({
+    type: 'copy-dataset',
+    format,
+    tags,
+    messageIds,
+  }), [request]);
 
   return {
     ...state,
@@ -162,5 +176,6 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
     clear,
     getMessage,
     queryFields,
+    copyDataset,
   };
 };

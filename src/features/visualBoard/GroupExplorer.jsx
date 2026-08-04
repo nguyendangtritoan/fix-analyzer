@@ -39,8 +39,8 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
   const pagination = useMemo(() => paginateItems(filtered, page, pageSize), [filtered, page, pageSize]);
 
   return (
-    <aside className="flex min-h-[680px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 p-4">
+    <aside className="flex min-h-[680px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:h-full xl:min-h-0">
+      <div className="shrink-0 border-b border-slate-200 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Boxes size={16} className="text-blue-600" /> Detected groups</h2>
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{formatInteger(groups.length)}</span>
@@ -55,7 +55,7 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
         </select>
       </div>
 
-      <div className="border-b border-slate-100 p-2">
+      <div className="shrink-0 border-b border-slate-100 p-2">
         <button type="button" onClick={() => onSelect('all')} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold ${selectedGroupId === 'all' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}>
           <span>All messages</span><span>{formatInteger(messageCount)}</span>
         </button>
@@ -64,7 +64,7 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
         </button>
       </div>
 
-      <div className="flex-1 p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 [scrollbar-gutter:stable]" aria-label="Detected groups list" tabIndex="0">
         {pagination.items.map(group => {
           const selected = selectedGroupId === group.id;
           return (
@@ -91,7 +91,7 @@ const GroupExplorer = ({ groups, selectedGroupId, onSelect, messageCount, ungrou
         {!filtered.length && <p className="p-5 text-center text-xs text-slate-400">No groups match these filters.</p>}
       </div>
 
-      <div className="border-t border-slate-200 p-3">
+      <div className="shrink-0 border-t border-slate-200 p-3">
         <div className="mb-2 flex items-center justify-between gap-3 text-[10px] text-slate-500">
           <span>
             {filtered.length

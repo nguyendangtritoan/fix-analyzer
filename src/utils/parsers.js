@@ -1,4 +1,5 @@
-import { DEFAULT_TAGS, DEFAULT_ENUMS } from '../constants/fixData';
+import { DEFAULT_TAGS, DEFAULT_ENUMS } from '../constants/fixData.js';
+import { splitFixTokens } from './fixDelimiter.js';
 
 /**
  * Main function to parse the user-uploaded QuickFIX XML.
@@ -204,10 +205,6 @@ export const parseQuickFixXml = (xmlString) => {
 export const parseFixMessage = (raw) => {
   if (!raw || !raw.trim()) return [];
   let pairs = [];
-  const soh = String.fromCharCode(1);
-  
-  // Normalize Delimiters (SOH, Pipe, Caret)
-  const clean = raw.replace(/\|/g, soh).replace(/\^A/g, soh);
   
   // Heuristic 1: Bracketed Logs <35> MsgType = D
   if (/<(\d+)>[^=]*=\s*(.*)/.test(raw)) {
@@ -233,20 +230,8 @@ export const parseFixMessage = (raw) => {
     return pairs;
   }
 
-  // Heuristic 3: Standard Delimited
-  if (!clean.includes(soh) && clean.includes('=')) {
-     const fieldRegex = new RegExp(`(\\d+)=([^=\\s${soh}]+)`, 'g');
-     const spaceMatches = clean.match(fieldRegex);
-     if (spaceMatches) {
-        spaceMatches.forEach(m => {
-            const [k, v] = m.split('=');
-            pairs.push({ tag: parseInt(k), value: v });
-        });
-        return pairs;
-     }
-  }
-
-  const tokens = clean.split(soh);
+  // Heuristic 3: auto-detected delimiter or whitespace-separated tag=value fields.
+  const { tokens } = splitFixTokens(raw);
   tokens.forEach(t => {
     if (t.includes('=')) {
       const parts = t.split('=');

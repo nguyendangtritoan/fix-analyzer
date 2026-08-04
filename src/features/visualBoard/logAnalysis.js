@@ -1,4 +1,4 @@
-const SOH = '\u0001';
+import { SOH, splitFixTokens } from '../../utils/fixDelimiter.js';
 
 const MESSAGE_TYPE_NAMES = {
   '0': 'Heartbeat',
@@ -95,24 +95,6 @@ export const parseFixTimestamp = value => {
     Number(match[6]),
     parseFraction(match[7]),
   );
-};
-
-const getDelimiter = raw => {
-  if (raw.includes(SOH)) return SOH;
-  if (raw.includes('^A')) return '^A';
-  if (raw.includes('|')) return '|';
-  return null;
-};
-
-const splitFixTokens = raw => {
-  const delimiter = getDelimiter(raw);
-  if (delimiter) return { delimiter, tokens: raw.split(delimiter) };
-
-  const tokens = [];
-  const matcher = /(?:^|\s)(\d+)=([^\s=]+)/g;
-  let match;
-  while ((match = matcher.exec(raw)) !== null) tokens.push(`${match[1]}=${match[2]}`);
-  return { delimiter: null, tokens };
 };
 
 export const parseFixPairs = raw => {
@@ -277,6 +259,8 @@ const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
   return {
     id,
     lineNumber,
+    sourceLineStart: sourceOffset,
+    sourceLineEnd: sourceOffset + line.length,
     rawStart: sourceOffset + fixStart,
     rawEnd: sourceOffset + fixStart + raw.length,
     level: prefix.level,

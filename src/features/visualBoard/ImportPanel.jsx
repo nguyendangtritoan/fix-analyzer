@@ -28,7 +28,7 @@ const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
             Import FIX activity
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-            Paste exchanged messages or select an uncompressed text log. SOH, pipe, and ^A delimiters are supported.
+            Paste exchanged messages, a copied Visual Board export, or select an uncompressed text log. FIX delimiters and copied formats are detected automatically.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
@@ -76,7 +76,7 @@ const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
         onChange={event => setText(event.target.value)}
         disabled={isProcessing}
         className="h-52 w-full resize-y rounded-xl border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
-        placeholder="Paste one or more FIX log lines here…"
+        placeholder="Paste FIX log lines or a copied raw, pretty, or JSON export…"
         spellCheck="false"
       />
 

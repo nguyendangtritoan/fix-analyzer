@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useFixDictionary } from '../context/useFixDictionary';
 import BoardToolbar from '../features/visualBoard/BoardToolbar';
+import DatasetCopyMenu from '../features/visualBoard/DatasetCopyMenu';
 import DiagnosticsPanel from '../features/visualBoard/DiagnosticsPanel';
 import GroupExplorer from '../features/visualBoard/GroupExplorer';
 import ImportPanel from '../features/visualBoard/ImportPanel';
@@ -35,6 +36,8 @@ const TABS = [
   { id: 'diagnostics', label: 'Diagnostics', icon: FileSearch },
 ];
 
+const SELF_SCROLLING_TABS = new Set(['flow', 'prices', 'orders', 'diagnostics']);
+
 const INITIAL_FILTERS = {
   search: '',
   messageType: 'all',
@@ -45,7 +48,7 @@ const INITIAL_FILTERS = {
 };
 
 const VisualBoardPage = () => {
-  const { autoDetectBeginString } = useFixDictionary();
+  const { autoDetectBeginString, tags } = useFixDictionary();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedGroupId, setSelectedGroupId] = useState('all');
   const [selectedRecordId, setSelectedRecordId] = useState(null);
@@ -101,9 +104,15 @@ const VisualBoardPage = () => {
 
   const worker = useVisualBoardWorker({ onResult: handleResult });
   const result = worker.result;
+  const copyDataset = worker.copyDataset;
 
   const recordsById = useMemo(() => new Map((result?.records || []).map(record => [record.id, record])), [result]);
   const selectedRecord = selectedRecordId ? recordsById.get(selectedRecordId) : null;
+  const selectedGroup = useMemo(() => (
+    selectedGroupId !== 'all' && selectedGroupId !== 'ungrouped'
+      ? result?.groups.find(group => group.id === selectedGroupId) || null
+      : null
+  ), [result, selectedGroupId]);
 
   const filteredRecords = useMemo(() => {
     if (!result) return [];
@@ -163,6 +172,10 @@ const VisualBoardPage = () => {
     setIsFlowFullscreen(false);
   };
 
+  const handleDatasetCopy = useCallback(format => (
+    copyDataset(format, tags, selectedGroup?.messageIds || null)
+  ), [copyDataset, selectedGroup, tags]);
+
   const navigateSelectedRecord = useCallback(direction => {
     if (!selectedRecordId) return;
     const index = filteredRecords.findIndex(record => record.id === selectedRecordId);
@@ -184,13 +197,17 @@ const VisualBoardPage = () => {
           onCancel={worker.cancel}
         />
       ) : (
-        <div className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2"><FileSearch size={15} className="text-blue-600" /><span className="truncate text-sm font-bold text-slate-800" title={worker.sourceName}>{worker.sourceName}</span></div>
-              <p className="mt-1 text-xs text-slate-400">{formatInteger(result.summary.messageCount)} messages · {formatInteger(result.groups.length)} groups · processed locally</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="grid items-start gap-4 xl:h-[calc(100dvh-121px)] xl:min-h-0 xl:grid-cols-[300px_minmax(0,1fr)] xl:items-stretch">
+          <GroupExplorer
+            groups={result.groups}
+            selectedGroupId={selectedGroupId}
+            onSelect={handleGroupSelect}
+            messageCount={result.summary.messageCount}
+            ungroupedCount={result.diagnostics.ungroupedMessageCount}
+          />
+
+          <div className="min-w-0 space-y-4 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0 xl:gap-4">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Visual Board analysis modes">
                 {TABS.map(tab => {
                   const Icon = tab.icon;
@@ -201,25 +218,20 @@ const VisualBoardPage = () => {
                   );
                 })}
               </div>
+              <DatasetCopyMenu
+                sourceKind={worker.sourceKind}
+                hasGroupSelection={Boolean(selectedGroup)}
+                onCopy={handleDatasetCopy}
+              />
               <button type="button" onClick={handleClear} className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600">
                 <Trash2 size={13} /> Clear data
               </button>
             </div>
-          </div>
 
-          <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-            <GroupExplorer
-              groups={result.groups}
-              selectedGroupId={selectedGroupId}
-              onSelect={handleGroupSelect}
-              messageCount={result.summary.messageCount}
-              ungroupedCount={result.diagnostics.ungroupedMessageCount}
-            />
-
-            <section className="min-w-0">
+            <section className={`min-w-0 xl:min-h-0 xl:flex-1 ${SELF_SCROLLING_TABS.has(activeTab) ? 'xl:overflow-hidden' : 'xl:overflow-y-auto xl:overscroll-contain xl:[scrollbar-gutter:stable]'}`}>
               {activeTab === 'overview' && <OverviewPanel result={result} />}
               {activeTab === 'flow' && (
-                <div className={isFlowFullscreen ? 'fixed inset-0 z-[45] flex min-h-0 flex-col gap-3 overflow-hidden bg-slate-50 p-3 sm:p-4' : 'space-y-3'} aria-label={isFlowFullscreen ? 'Full-screen message flow' : undefined}>
+                <div className={isFlowFullscreen ? 'fixed inset-0 z-[45] flex min-h-0 flex-col gap-3 overflow-hidden bg-slate-50 p-3 sm:p-4' : 'space-y-3 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0 xl:gap-3'} aria-label={isFlowFullscreen ? 'Full-screen message flow' : undefined}>
                   <BoardToolbar
                     filters={filters}
                     onFiltersChange={setFilters}
@@ -243,8 +255,8 @@ const VisualBoardPage = () => {
                       </button>
                     </div>
                   </div>
-                  <div className={isFlowFullscreen ? 'min-h-0 flex-1' : undefined}>
-                    <SequenceBoard records={filteredRecords} selectedId={selectedRecordId} onSelect={setSelectedRecordId} latencyMode={filters.latencyMode} fieldTags={fieldTags} fieldValues={fieldValues} fillHeight={isFlowFullscreen} />
+                  <div className={isFlowFullscreen ? 'min-h-0 flex-1' : 'xl:min-h-0 xl:flex-1'}>
+                    <SequenceBoard records={filteredRecords} selectedId={selectedRecordId} onSelect={setSelectedRecordId} latencyMode={filters.latencyMode} fieldTags={fieldTags} fieldValues={fieldValues} fillHeight={isFlowFullscreen} fitContainer={!isFlowFullscreen} />
                   </div>
                 </div>
               )}

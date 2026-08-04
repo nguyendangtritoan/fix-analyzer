@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Clock3, Inbox, MoveRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock3, Inbox, MoveRight } from 'lucide-react';
 import { getBoardCorrelationIds } from './correlation';
 import { formatDuration, formatInteger, formatTimeOnly } from './formatters';
 import { getMessageTypeName } from './logAnalysis';
+import { getMessagePathDisplay } from './messageDirection';
 
 const ROW_HEIGHT = 70;
 const HEADER_HEIGHT = 45;
@@ -25,7 +26,7 @@ const getLatency = (record, previousRecord, mode) => {
   return record.captureLagMs;
 };
 
-const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, fieldValues, fillHeight = false }) => {
+const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, fieldValues, fillHeight = false, fitContainer = false }) => {
   const scrollRef = useRef(null);
   const initialVisibleRange = getVisibleRange(records.length, 0, 685);
   const visibleRangeRef = useRef(initialVisibleRange);
@@ -58,17 +59,25 @@ const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, 
   const visibleRecords = records.slice(visibleRange.start, visibleRange.end);
 
   if (!records.length) {
+    const emptyHeight = fillHeight
+      ? 'h-full min-h-0'
+      : fitContainer
+        ? 'h-[640px] xl:h-full xl:min-h-0'
+        : 'h-[640px]';
     return (
-      <div className={`flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-400 ${fillHeight ? 'h-full min-h-0' : 'h-[640px]'}`}>
+      <div className={`flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-400 ${emptyHeight}`}>
         <Inbox size={38} className="mb-3 opacity-40" />
         <p className="text-sm font-semibold">No messages match the active filters.</p>
       </div>
     );
   }
 
+  const boardHeight = fillHeight ? 'h-full min-h-0' : fitContainer ? 'xl:h-full xl:min-h-0' : '';
+  const scrollerHeight = fillHeight ? 'h-full' : fitContainer ? 'h-[685px] xl:h-full' : 'h-[685px]';
+
   return (
-    <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${fillHeight ? 'h-full min-h-0' : ''}`}>
-      <div ref={scrollRef} onScroll={event => updateVisibleRange(event.currentTarget.scrollTop, event.currentTarget.clientHeight)} className={`relative overflow-auto overscroll-contain [contain:layout_paint] ${fillHeight ? 'h-full' : 'h-[685px]'}`} tabIndex="0" aria-label={`Sequence of ${formatInteger(records.length)} FIX messages`}>
+    <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${boardHeight}`}>
+      <div ref={scrollRef} onScroll={event => updateVisibleRange(event.currentTarget.scrollTop, event.currentTarget.clientHeight)} className={`relative overflow-auto overscroll-contain [contain:layout_paint] ${scrollerHeight}`} tabIndex="0" aria-label={`Sequence of ${formatInteger(records.length)} FIX messages`}>
         <div
           className="sticky top-0 z-20 grid items-center gap-3 border-b border-slate-200 bg-slate-800 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-300"
           style={{ gridTemplateColumns, height: `${HEADER_HEIGHT}px`, minWidth: `${boardMinWidth}px` }}
@@ -87,6 +96,8 @@ const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, 
             const correlationIds = getBoardCorrelationIds(record);
             const messageName = getMessageTypeName(record.messageType);
             const selected = selectedId === record.id;
+            const messagePath = getMessagePathDisplay(record);
+            const DirectionArrow = messagePath.arrowDirection === 'left' ? ArrowLeft : ArrowRight;
 
             return (
               <button
@@ -103,9 +114,9 @@ const SequenceBoard = ({ records, selectedId, onSelect, latencyMode, fieldTags, 
                 </span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                    <span className="max-w-[180px] truncate" title={record.from}>{record.from}</span>
-                    <ArrowRight size={15} className={record.direction === 'incoming' ? 'text-emerald-500' : record.direction === 'outgoing' ? 'text-blue-500' : 'text-slate-400'} />
-                    <span className="max-w-[180px] truncate" title={record.to}>{record.to}</span>
+                    <span className="max-w-[180px] truncate" title={messagePath.left}>{messagePath.left}</span>
+                    <DirectionArrow data-direction-arrow={messagePath.arrowDirection} size={15} className={record.direction === 'incoming' ? 'text-emerald-500' : record.direction === 'outgoing' ? 'text-blue-500' : 'text-slate-400'} />
+                    <span className="max-w-[180px] truncate" title={messagePath.right}>{messagePath.right}</span>
                   </span>
                   <span className="mt-1 flex items-center gap-2 text-[10px] text-slate-400">
                     <span className={`rounded px-1.5 py-0.5 font-semibold ${record.direction === 'incoming' ? 'bg-emerald-50 text-emerald-700' : record.direction === 'outgoing' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{record.direction}</span>

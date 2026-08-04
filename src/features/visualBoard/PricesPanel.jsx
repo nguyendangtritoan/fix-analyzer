@@ -16,12 +16,12 @@ const PricesPanel = ({ rows, onSelectMessage }) => {
   ];
 
   return (
-    <div>
-      <div className="mb-3">
+    <div className="xl:flex xl:h-full xl:min-h-0 xl:flex-col">
+      <div className="mb-3 shrink-0">
         <h3 className="font-bold text-slate-800">Latest quotes and market-data prices</h3>
         <p className="mt-1 text-xs text-slate-500">One latest row per session-scoped request or quote ID. Click a row to inspect its source message.</p>
       </div>
-      <DataTable columns={columns} rows={rows} rowKey={row => `${row.kind}-${row.session}-${row.correlationId}-${row.symbol}`} onRowClick={row => onSelectMessage(row.messageId)} emptyMessage="No Quote(S) or MarketDataSnapshot(W) prices were found." />
+      <DataTable columns={columns} rows={rows} rowKey={row => `${row.kind}-${row.session}-${row.correlationId}-${row.symbol}`} onRowClick={row => onSelectMessage(row.messageId)} emptyMessage="No Quote(S) or MarketDataSnapshot(W) prices were found." fitContainer scrollLabel="Scrollable quotes and prices table" />
     </div>
   );
 };
