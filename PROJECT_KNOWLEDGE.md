@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-08-04
+Last Updated: 2026-08-12
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with two browser-only workflows:
@@ -37,12 +37,12 @@ No backend exists. Confidential imported content must remain in the current brow
 - `src/features/visualBoard/datasetExport.js`: produces whole-paste or selected-group clipboard text in raw, normalized FIX, readable, and JSON formats while enforcing file-copy scope.
 - `src/features/visualBoard/datasetImport.js`: recognizes copied pretty/bracketed and duplicate-preserving JSON text and reconstructs ordered FIX messages for pasted round trips.
 - `src/features/visualBoard/fieldProjection.js`: normalizes requested projection tags and preserves every ordered occurrence of repeated tags.
-- `src/features/visualBoard/useVisualBoardWorker.js`: worker lifecycle, cancellation, input validation, and 100 MB safety limit.
+- `src/features/visualBoard/useVisualBoardWorker.js`: worker lifecycle, cancellation, input validation, and 1 GB safety limit.
 - `src/features/visualBoard/*.jsx`: importer, group explorer, virtual sequence board, message drawer, and analysis panels.
 - `src/utils/parsers.js`: individual-message parsing and QuickFIX XML dictionary parsing/grouping.
 - `src/utils/fixDelimiter.js`: shared automatic FIX field-delimiter detection and lossless tokenization for both routes.
 - `src/components/features/SingleView.jsx`: dictionary-enriched grouped message rendering, reused by the drawer.
-- `src/constants/dictionarySources.js`: metadata for FIX 4.0–4.4 bundled dictionaries.
+- `src/constants/dictionarySources.js`: metadata for bundled FIX 4.0–4.4, IMIX 2.0, and IMIXT 1.0 dictionaries.
 - `vite.config.js`: embeds dictionary XML at build time and injects the production CSP.
 - `scripts/verify-local-only.mjs`: checks forbidden network APIs, runtime dependencies, and CSP settings.
 
@@ -50,8 +50,8 @@ No backend exists. Confidential imported content must remain in the current brow
 - Empty hash/root: Message Analyzer.
 - `#/visual-board`: Visual Board.
 - Navigation is hash based so static hosting needs no rewrite rules.
-- FIX 4.0–4.4 XML is converted to a virtual JavaScript module by Vite, eliminating runtime dictionary fetches.
-- Auto-detection reads `BeginString(8)` from current input/results. Manual selection and local custom XML upload remain available.
+- FIX 4.0–4.4, IMIX 2.0, and IMIXT 1.0 XML is converted to a virtual JavaScript module by Vite, eliminating runtime dictionary fetches. IMIXT 1.0 is composed with IMIX 2.0 so transport/admin and application message definitions are available together.
+- Auto-detection reads `BeginString(8)` from current input/results and maps supported versioned protocol families such as `FIX.4.4`, `IMIX.2.0`, and `IMIXT.1.0`. Manual selection and local custom XML upload remain available.
 - Custom dictionaries exist only in memory and are shared between both routes for the lifetime of the tab.
 
 ## Message Analyzer Behavior
@@ -65,7 +65,7 @@ No backend exists. Confidential imported content must remain in the current brow
 `groupify` selects a `MsgType(35)` schema, renders nested repeating groups, and retains the previous inference behavior for dictionary-missing count/member tags. `flattenForDiff` aligns grouped trees across all populated inputs. Matching tags can be highlighted with multiple colors and visual indentation can be toggled independently of grouping.
 
 ## Visual Board Data Flow
-1. `ImportPanel` accepts pasted text or uncompressed `.log`, `.txt`, and `.fix` files up to 100 MB.
+1. `ImportPanel` accepts pasted text or uncompressed `.log`, `.txt`, and `.fix` files up to 1 GB.
 2. Compressed extensions (`bz2`, `gz`, `zip`, `7z`, `rar`, `xz`, `zst`) are rejected with instructions to decompress locally. No decompression dependency is included.
 3. The Web Worker reads the `File` or pasted text, parses log-prefix metadata and FIX pairs, and keeps the analysis source plus message character offsets. A pasted pretty/JSON export is normalized into one FIX message per line while its exact original paste is retained for raw copy-all.
 4. The main thread receives compact records without raw log lines.
@@ -75,7 +75,7 @@ No backend exists. Confidential imported content must remain in the current brow
 8. Clear, cancel, route teardown, reload, or tab close terminates the worker and releases its dataset.
 
 ## Visual Board Parsing and Correlation
-- Prefix parsing extracts timestamp, incoming/outgoing direction, and common `sender->target:qualifier` session labels.
+- Prefix parsing extracts timestamp, incoming/outgoing direction, and common `sender->target:qualifier` session labels. Message admission recognizes versioned FIX-family BeginString values rather than requiring the literal `8=FIX.` prefix.
 - A consistent delimiter is inferred per FIX message from the `BeginString(8)` → `BodyLength(9)` boundary. Arbitrary single- or multi-character separators are supported, including control characters, punctuation, text/Unicode markers, and numeric markers. Headerless input uses repeated-boundary inference; whitespace-separated fields retain a best-effort fallback.
 - Tokenization only treats the detected delimiter as a boundary when it is immediately followed by a numeric `tag=`, preserving spaces, equals signs, and delimiter-like punctuation inside field values.
 - Duplicate FIX fields are preserved in ordered detail pairs; an index also exposes convenient first values.
@@ -127,8 +127,8 @@ Common commands:
 
 The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check`.
 
-## Current Baseline (2026-08-04)
-- Forty-nine parser/correlation, delimiter, pagination, time-range, field-projection, dataset-export, copied-format import, and message-direction tests pass.
+## Current Baseline (2026-08-07)
+- Fifty-four parser/correlation, delimiter, dictionary composition/version, pagination, time-range, field-projection, dataset-export, copied-format import, and message-direction tests pass.
 - ESLint passes.
 - Production build passes and includes the strict CSP.
 - Local-only security verification passes.
@@ -140,12 +140,24 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Exact-ID correlation avoids false positives but cannot infer a lifecycle when the producer omits all supported bridge identifiers.
 - `MDReqID(262)` is session-scoped; incorrect/missing session prefixes reduce correlation quality.
 - Round-trip matching currently covers `D → 8`, not every possible FIX request/response pair.
-- A 100 MB input can still consume several times that amount in transient browser/worker memory; keep compact records free of raw lines and avoid unnecessary source copies.
+- A large input can consume several times its file size in transient browser/worker memory; the 1 GB ceiling is a safety boundary, not a promise that every device can analyze a file of that size. Keep compact records free of raw lines and avoid unnecessary source copies.
 - Diff alignment remains key-path based, so complex repeating-group reorder scenarios may be noisy.
 - `src/App.css` is unused Vite starter CSS.
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+### 2026-08-12 - Raise Visual Board Input Limit
+- Files: `src/features/visualBoard/useVisualBoardWorker.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Raised the browser-local pasted-text and uncompressed-file safety limit from 100 MB to 1 GB.
+- Behavior Impact: Visual Board now accepts confidential local logs around 1 GB while retaining a finite guard against larger inputs. Processing and retained data remain browser-local.
+- Verification: `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed.
+
+### 2026-08-07 - Add Bundled IMIXT Dictionaries
+- Files: `public/dictionaries/IMIX20.xml`, `public/dictionaries/IMIXT10.xml`, `vite.config.js`, `src/constants/dictionarySources.js`, `src/context/FixDictionaryProvider.jsx`, `src/components/features/DictionaryControls.jsx`, `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/logAnalysis.js`, `src/features/visualBoard/logAnalysis.test.js`, `src/utils/fixDelimiter.js`, `src/utils/fixDelimiter.test.js`, `src/utils/dictionaryVersion.js`, `src/utils/dictionaryVersion.test.js`, `src/utils/dictionaryMerge.js`, `src/utils/dictionaryMerge.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Bundled the supplied IMIX 2.0 application and IMIXT 1.0 transport dictionaries, composed them for IMIXT analysis, and generalized BeginString recognition beyond the literal FIX family prefix.
+- Behavior Impact: `8=IMIXT.1.0` logs now load in Visual Board, auto-select the combined IMIXT dictionary, produce groups/prices/statistics, and render application repeating groups such as `NoMDEntries(268)` with IMIX field names and enums. Both IMIX 2.0 and IMIXT 1.0 can also be selected manually, with no runtime dictionary request.
+- Verification: `npm test` passed 54 tests; `npm run lint`, `npm run build`, and `npm run verify:security` passed. The supplied log produced 39 messages, 11 market-data groups, 11 price rows, and one skipped truncated trailing fragment. Browser QA confirmed `Active: IMIXT 1.0`, four correctly grouped `NoMDEntries(268)` instances, IMIX field names/enums, and no console warnings or errors.
+
 ### 2026-08-04 - Align Analysis Scrolling and Flow Directions
 - Files: `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/DataTable.jsx`, `src/features/visualBoard/PricesPanel.jsx`, `src/features/visualBoard/OrdersPanel.jsx`, `src/features/visualBoard/DiagnosticsPanel.jsx`, `src/features/visualBoard/SequenceBoard.jsx`, `src/features/visualBoard/messageDirection.js`, `src/features/visualBoard/messageDirection.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
 - Summary: Made Quotes & Prices, Orders, and Diagnostics own their bounded data scrollers like Flow, and gave incoming and outgoing message paths opposite arrow directions with stable endpoint positions.

@@ -1,4 +1,5 @@
-import { SOH, splitFixTokens } from '../../utils/fixDelimiter.js';
+import { dictionaryKeyFromBeginString } from '../../utils/dictionaryVersion.js';
+import { findFixMessageStart, SOH, splitFixTokens } from '../../utils/fixDelimiter.js';
 
 const MESSAGE_TYPE_NAMES = {
   '0': 'Heartbeat',
@@ -121,11 +122,6 @@ export const extractTagValue = (raw, requestedTag) => {
   return undefined;
 };
 
-const normalizeVersion = beginString => {
-  const match = String(beginString || '').match(/^FIX\.(\d+)\.(\d+)$/);
-  return match ? `FIX${match[1]}${match[2]}` : null;
-};
-
 const getByteLength = value => new TextEncoder().encode(value).length;
 
 const validateFixEnvelope = (raw, delimiter, fields) => {
@@ -236,7 +232,7 @@ const getBestMarketEntry = (entries, type) => {
 };
 
 const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
-  const fixStart = line.indexOf('8=FIX.');
+  const fixStart = findFixMessageStart(line);
   if (fixStart < 0) return null;
 
   const prefix = parsePrefix(line.slice(0, fixStart));
@@ -273,7 +269,7 @@ const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
     from,
     to,
     beginString: fields['8'] || null,
-    dictionaryVersion: normalizeVersion(fields['8']),
+    dictionaryVersion: dictionaryKeyFromBeginString(fields['8']),
     messageType,
     messageName: MESSAGE_TYPE_NAMES[messageType] || `MsgType ${messageType}`,
     sequenceNumber: /^\d+$/.test(fields['34'] || '') ? Number(fields['34']) : null,

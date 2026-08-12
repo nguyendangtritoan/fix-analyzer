@@ -1,6 +1,6 @@
 const SOH = '\u0001';
 const MAX_DELIMITER_LENGTH = 32;
-const BEGIN_STRING_PATTERN = /8=FIX(?:T)?\.\d\.\d/i;
+const BEGIN_STRING_PATTERN = /(?:^|[^A-Za-z0-9])8=([A-Z][A-Z0-9]*\.\d\.\d)/i;
 const COMMON_DELIMITERS = [SOH, '^A', '|'];
 
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -11,11 +11,25 @@ const countTagBoundaries = (input, delimiter) => {
   return Array.from(input.matchAll(matcher)).length;
 };
 
-const delimiterAfterBeginString = input => {
-  const beginMatch = BEGIN_STRING_PATTERN.exec(input);
-  if (!beginMatch) return null;
+const findBeginString = input => {
+  const match = BEGIN_STRING_PATTERN.exec(input);
+  if (!match) return null;
 
-  const remainder = input.slice(beginMatch.index + beginMatch[0].length);
+  const markerOffset = match[0].lastIndexOf('8=');
+  const index = match.index + markerOffset;
+  return {
+    index,
+    endIndex: index + 2 + match[1].length,
+  };
+};
+
+export const findFixMessageStart = raw => findBeginString(String(raw || ''))?.index ?? -1;
+
+const delimiterAfterBeginString = input => {
+  const beginString = findBeginString(input);
+  if (!beginString) return null;
+
+  const remainder = input.slice(beginString.endIndex);
   const bodyLengthIndex = remainder.indexOf('9=');
   if (bodyLengthIndex > 0 && bodyLengthIndex <= MAX_DELIMITER_LENGTH) {
     const candidate = remainder.slice(0, bodyLengthIndex);
@@ -58,8 +72,8 @@ export const detectFixDelimiter = raw => {
 };
 
 const getFixStart = input => {
-  const beginMatch = BEGIN_STRING_PATTERN.exec(input);
-  if (beginMatch) return beginMatch.index;
+  const beginStringStart = findFixMessageStart(input);
+  if (beginStringStart >= 0) return beginStringStart;
 
   const firstTag = /\d+=/.exec(input);
   return firstTag?.index ?? -1;

@@ -5,6 +5,7 @@ import {
   getDictionarySource,
   SUPPORTED_DICTIONARIES,
 } from '../constants/dictionarySources';
+import { mergeFixDictionaries } from '../utils/dictionaryMerge.js';
 import { parseQuickFixXml } from '../utils/parsers';
 import FixDictionaryContext from './FixDictionaryContext';
 
@@ -16,7 +17,10 @@ const getStandardDictionary = (version) => {
   const source = getDictionarySource(version);
   if (!source) return null;
 
-  const parsed = parseQuickFixXml(source);
+  const parsedSource = parseQuickFixXml(source);
+  const parsed = version === 'IMIXT10'
+    ? mergeFixDictionaries(getStandardDictionary('IMIX20'), parsedSource)
+    : parsedSource;
   dictionaryCache.set(version, parsed);
   return parsed;
 };

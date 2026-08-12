@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_FILE_BYTES = 1024 * 1024 * 1024;
 const COMPRESSED_EXTENSION = /\.(?:bz2|gz|zip|7z|rar|xz|zst)$/i;
 const TEXT_LOG_NAME = /(?:\.log(?:[.-].*)?|\.txt|\.fix)$/i;
 
@@ -112,7 +112,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
       setState(current => ({
         ...current,
         status: 'error',
-        error: 'This file exceeds the 100 MB local safety limit.',
+        error: 'This file exceeds the 1 GB local safety limit.',
       }));
       return false;
     }
@@ -132,7 +132,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
       setState(current => ({
         ...current,
         status: 'error',
-        error: 'This pasted log exceeds the 100 MB local safety limit.',
+        error: 'This pasted log exceeds the 1 GB local safety limit.',
       }));
       return false;
     }

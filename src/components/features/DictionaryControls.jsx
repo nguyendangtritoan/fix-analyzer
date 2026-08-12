@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, Settings, RefreshCw, ChevronDown, FileCode, Zap, CheckCircle } from 'lucide-react';
-
-const DICTIONARIES = ['FIX40', 'FIX41', 'FIX42', 'FIX43', 'FIX44'];
+import { SUPPORTED_DICTIONARIES } from '../../constants/dictionarySources';
+import { formatDictionaryLabel } from '../../utils/dictionaryVersion.js';
 
 const DictionaryControls = ({ 
   mode, 
@@ -49,7 +49,7 @@ const DictionaryControls = ({
     triggerLabel = "Auto-Detect";
     TriggerIcon = Zap;
   } else {
-    triggerLabel = activeDict.replace("FIX", "FIX ");
+    triggerLabel = formatDictionaryLabel(activeDict);
     TriggerIcon = FileCode;
   }
 
@@ -105,7 +105,7 @@ const DictionaryControls = ({
             </div>
 
             <div className="max-h-48 overflow-y-auto">
-              {DICTIONARIES.map(d => (
+              {SUPPORTED_DICTIONARIES.map(d => (
                 <button
                   key={d}
                   onClick={() => handleOptionClick('manual', d)}
@@ -113,7 +113,7 @@ const DictionaryControls = ({
                 >
                   <div className={`w-1.5 h-1.5 rounded-full ml-1.5 mr-1 ${mode === 'manual' && activeDict === d && !customFileName ? 'bg-blue-500' : 'bg-slate-300'}`} />
                   <span className={mode === 'manual' && activeDict === d && !customFileName ? 'text-blue-700 font-medium' : 'text-slate-600'}>
-                    {d.replace('FIX', 'FIX ')}
+                    {formatDictionaryLabel(d)}
                   </span>
                   {mode === 'manual' && activeDict === d && !customFileName && <CheckCircle size={14} className="ml-auto text-blue-600" />}
                 </button>
@@ -156,7 +156,7 @@ const DictionaryControls = ({
              {mode === 'auto' && (
                <RefreshCw size={12} className="animate-[spin_3s_linear_infinite] text-amber-500 shrink-0" />
              )}
-             <span className="truncate">Active: <span className="font-mono font-bold text-slate-700">{activeDict}</span></span>
+             <span className="truncate">Active: <span className="font-mono font-bold text-slate-700">{formatDictionaryLabel(activeDict)}</span></span>
           </div>
         )}
       </div>

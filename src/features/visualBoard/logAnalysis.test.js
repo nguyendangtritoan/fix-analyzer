@@ -60,6 +60,34 @@ test('analyzes log records with an auto-detected custom delimiter', () => {
   assert.equal(result.records[0].captureLagMs, 5);
 });
 
+test('analyzes IMIXT application messages and ignores a truncated trailing fragment', () => {
+  const raw = [
+    '8=IMIXT.1.0', '9=330', '35=W', '34=250882', '49=SND_BCH3_MKT',
+    '52=20260803-11:00:00.075', '56=TRD_BCH3_MKT', '262=SP.EURGBP__3',
+    '55=EUR/GBP', '268=2', '269=0', '270=0.85601', '271=1000000',
+    '269=1', '270=0.85607', '271=1000000', '10=185',
+  ].join('|') + '|';
+  const text = [
+    line(
+      '03.08.26 11:00:00.075',
+      'outgoing',
+      'IMIXT.1.0:SND_BCH3_MKT->TRD_BCH3_MKT:Standard Group_MKT',
+      raw,
+    ),
+    ' INFO [03.08.26 11:00:00.432] outg',
+  ].join('\n');
+
+  const result = analyzeLogText(text);
+  assert.equal(result.summary.messageCount, 1);
+  assert.deepEqual(result.summary.versionCounts, { 'IMIXT.1.0': 1 });
+  assert.equal(result.records[0].dictionaryVersion, 'IMIXT10');
+  assert.equal(result.records[0].fields['262'], 'SP.EURGBP__3');
+  assert.equal(result.groups[0].type, 'market-data');
+  assert.equal(result.prices[0].bidPrice, '0.85601');
+  assert.equal(result.prices[0].offerPrice, '0.85607');
+  assert.equal(result.diagnostics.skippedLineCount, 1);
+});
+
 test('builds explainable order and market-data groups with distinct latency semantics', () => {
   const execSession = 'FIX.4.4:CLIENT->VENUE:ExecSession';
   const quoteSession = 'FIX.4.4:CLIENT->VENUE:QuoteSession';

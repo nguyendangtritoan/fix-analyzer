@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const DICTIONARY_NAMES = ['FIX40', 'FIX41', 'FIX42', 'FIX43', 'FIX44']
+const DICTIONARY_NAMES = ['FIX40', 'FIX41', 'FIX42', 'FIX43', 'FIX44', 'IMIX20', 'IMIXT10']
 const VIRTUAL_DICTIONARIES_ID = 'virtual:fix-dictionaries'
 const RESOLVED_DICTIONARIES_ID = `\0${VIRTUAL_DICTIONARIES_ID}`
 

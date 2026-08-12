@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseFixPairs } from '../features/visualBoard/logAnalysis.js';
 import { parseFixMessage } from './parsers.js';
-import { detectFixDelimiter, SOH, splitFixTokens } from './fixDelimiter.js';
+import { detectFixDelimiter, findFixMessageStart, SOH, splitFixTokens } from './fixDelimiter.js';
 
 const fields = [
   ['8', 'FIX.4.4'],
@@ -68,5 +68,17 @@ test('infers repeated punctuation delimiters when BeginString is absent', () => 
     { tag: 11, value: 'ORDER-3' },
     { tag: 55, value: 'BTC/USD' },
     { tag: 54, value: '1' },
+  ]);
+});
+
+test('recognizes IMIXT BeginString framing without matching a longer numeric tag', () => {
+  const prefixed = ' INFO outgoing: 8=IMIXT.1.0|9=80|35=W|268=2|269=0|270=1.1|10=000|';
+  assert.equal(findFixMessageStart(prefixed), prefixed.indexOf('8=IMIXT.1.0'));
+  assert.equal(detectFixDelimiter(prefixed), '|');
+  assert.equal(findFixMessageStart('108=IMIXT.1.0|35=W|'), -1);
+  assert.deepEqual(parseFixPairs(prefixed).slice(0, 3), [
+    { tag: 8, value: 'IMIXT.1.0' },
+    { tag: 9, value: '80' },
+    { tag: 35, value: 'W' },
   ]);
 });

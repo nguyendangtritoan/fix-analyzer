@@ -91,7 +91,7 @@ const VisualBoardPage = () => {
   }, [isFlowFullscreen]);
 
   const handleResult = useCallback(result => {
-    const versions = Object.keys(result.summary.versionCounts).filter(version => version.startsWith('FIX.'));
+    const versions = Object.keys(result.summary.versionCounts).filter(version => version !== 'Unknown');
     if (versions.length === 1) autoDetectBeginString(versions[0]);
     setActiveTab('overview');
     setSelectedGroupId('all');
