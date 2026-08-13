@@ -146,6 +146,12 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+### 2026-08-13 - Stabilize Nested Fullscreen Message Drawers
+- Files: `src/utils/documentScrollLock.js`, `src/utils/documentScrollLock.test.js`, `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/MessageDrawer.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Replaced the fullscreen Flow view and message drawer's competing page-scroll side effects with one reference-counted document scroll lock. Closing a nested drawer now releases only its own lock and leaves the fullscreen board's fixed viewport untouched.
+- Behavior Impact: Opening, scrolling, and closing message details over fullscreen Flow no longer restores body styles or calls `window.scrollTo` while the underlying board is still active, removing the intermittent sheared/flickering frame shown in the supplied recording.
+- Verification: `npm test` passed 56 tests, including nested-lock and idempotent-release regressions; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. In-app browser QA completed 30 rapid fullscreen drawer open/close cycles with one stable 1280×720 board geometry and an uninterrupted fixed body lock.
+
 ### 2026-08-12 - Raise Visual Board Input Limit
 - Files: `src/features/visualBoard/useVisualBoardWorker.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
 - Summary: Raised the browser-local pasted-text and uncompressed-file safety limit from 100 MB to 1 GB.

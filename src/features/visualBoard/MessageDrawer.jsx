@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Braces, Clock3, Copy, FileCode2, Link2, X } from
 import CopyDropdown from '../../components/features/CopyDropdown';
 import SingleView from '../../components/features/SingleView';
 import { useFixDictionary } from '../../context/useFixDictionary';
+import { lockDocumentScroll } from '../../utils/documentScrollLock';
 import { TAG_HIGHLIGHT_STYLES } from '../../utils/highlightUtils';
 import { getBoardCorrelationIds } from './correlation';
 import { formatDuration, formatTimestamp } from './formatters';
@@ -44,26 +45,8 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
   }, [canGoNext, canGoPrevious, onClose, onNavigate]);
 
   useEffect(() => {
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const previousRootOverflow = document.documentElement.style.overflow;
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousBodyPosition = document.body.style.position;
-    const previousBodyTop = document.body.style.top;
-    const previousBodyWidth = document.body.style.width;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    return () => {
-      document.documentElement.style.overflow = previousRootOverflow;
-      document.body.style.overflow = previousBodyOverflow;
-      document.body.style.position = previousBodyPosition;
-      document.body.style.top = previousBodyTop;
-      document.body.style.width = previousBodyWidth;
-      window.scrollTo(scrollX, scrollY);
-    };
+    const releaseScrollLock = lockDocumentScroll();
+    return releaseScrollLock;
   }, []);
 
   if (!record) return null;
