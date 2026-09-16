@@ -1,28 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity,
-  CircleDollarSign,
-  FileSearch,
   LayoutDashboard,
   ListTree,
+  ListFilter,
   Maximize2,
   Minimize2,
-  ShoppingCart,
   Trash2,
 } from 'lucide-react';
 import { useFixDictionary } from '../context/useFixDictionary';
 import { lockDocumentScroll } from '../utils/documentScrollLock';
 import BoardToolbar from '../features/visualBoard/BoardToolbar';
 import DatasetCopyMenu from '../features/visualBoard/DatasetCopyMenu';
-import DiagnosticsPanel from '../features/visualBoard/DiagnosticsPanel';
+import FieldInvestigationPanel from '../features/visualBoard/FieldInvestigationPanel';
 import GroupExplorer from '../features/visualBoard/GroupExplorer';
 import ImportPanel from '../features/visualBoard/ImportPanel';
-import LatencyPanel from '../features/visualBoard/LatencyPanel';
 import MessageDrawer from '../features/visualBoard/MessageDrawer';
-import OrdersPanel from '../features/visualBoard/OrdersPanel';
 import OverviewPanel from '../features/visualBoard/OverviewPanel';
-import PricesPanel from '../features/visualBoard/PricesPanel';
 import SequenceBoard from '../features/visualBoard/SequenceBoard';
+import { normalizeFieldTags } from '../features/visualBoard/fieldProjection';
 import { formatInteger } from '../features/visualBoard/formatters';
 import { getMessageTypeName } from '../features/visualBoard/logAnalysis';
 import { isTimestampWithinTimeRange } from '../features/visualBoard/timeRange';
@@ -31,13 +26,10 @@ import { useVisualBoardWorker } from '../features/visualBoard/useVisualBoardWork
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'flow', label: 'Flow', icon: ListTree },
-  { id: 'latency', label: 'Latency', icon: Activity },
-  { id: 'prices', label: 'Quotes & Prices', icon: CircleDollarSign },
-  { id: 'orders', label: 'Orders', icon: ShoppingCart },
-  { id: 'diagnostics', label: 'Diagnostics', icon: FileSearch },
+  { id: 'fields', label: 'Field Counts', icon: ListFilter },
 ];
 
-const SELF_SCROLLING_TABS = new Set(['flow', 'prices', 'orders', 'diagnostics']);
+const SELF_SCROLLING_TABS = new Set(['flow', 'fields']);
 
 const INITIAL_FILTERS = {
   search: '',
@@ -48,16 +40,28 @@ const INITIAL_FILTERS = {
   timeTo: '',
 };
 
+const createFieldInvestigation = number => ({
+  id: `count-${number}`,
+  filters: [],
+  summary: null,
+  loading: false,
+});
+
 const VisualBoardPage = () => {
-  const { autoDetectBeginString, tags } = useFixDictionary();
+  const { autoDetectBeginString, tags, enums } = useFixDictionary();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedGroupId, setSelectedGroupId] = useState('all');
   const [selectedRecordId, setSelectedRecordId] = useState(null);
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [fieldTags, setFieldTags] = useState([]);
   const [fieldValues, setFieldValues] = useState(new Map());
+  const [fieldInvestigations, setFieldInvestigations] = useState(() => [createFieldInvestigation(1)]);
+  const [activeFieldInvestigationId, setActiveFieldInvestigationId] = useState('count-1');
   const [fieldLoading, setFieldLoading] = useState(false);
   const [isFlowFullscreen, setIsFlowFullscreen] = useState(false);
+  const fieldRequestRef = useRef(0);
+  const fieldCountRequestRef = useRef(new Map());
+  const fieldInvestigationSequenceRef = useRef(1);
 
   useEffect(() => {
     if (!isFlowFullscreen) return undefined;
@@ -84,12 +88,21 @@ const VisualBoardPage = () => {
     setFilters(INITIAL_FILTERS);
     setFieldTags([]);
     setFieldValues(new Map());
+    setFieldInvestigations([createFieldInvestigation(1)]);
+    setActiveFieldInvestigationId('count-1');
+    fieldInvestigationSequenceRef.current = 1;
+    fieldRequestRef.current += 1;
+    fieldCountRequestRef.current.clear();
+    setFieldLoading(false);
     setIsFlowFullscreen(false);
   }, [autoDetectBeginString]);
 
   const worker = useVisualBoardWorker({ onResult: handleResult });
   const result = worker.result;
   const copyDataset = worker.copyDataset;
+  const queryFields = worker.queryFields;
+  const countFields = worker.countFields;
+  const getFieldHints = worker.getFieldHints;
 
   const recordsById = useMemo(() => new Map((result?.records || []).map(record => [record.id, record])), [result]);
   const selectedRecord = selectedRecordId ? recordsById.get(selectedRecordId) : null;
@@ -98,6 +111,71 @@ const VisualBoardPage = () => {
       ? result?.groups.find(group => group.id === selectedGroupId) || null
       : null
   ), [result, selectedGroupId]);
+  const fieldScopeRecords = useMemo(() => {
+    if (!result) return [];
+    if (selectedGroupId === 'ungrouped') return result.records.filter(record => !record.groupId);
+    if (selectedGroupId !== 'all') return result.records.filter(record => record.groupId === selectedGroupId);
+    return result.records;
+  }, [result, selectedGroupId]);
+  const getFieldScopeMessageIds = useCallback(scopeId => {
+    if (!result || scopeId === 'all') return null;
+    if (scopeId === 'ungrouped') return result.records.filter(record => !record.groupId).map(record => record.id);
+    return result.groups.find(group => group.id === scopeId)?.messageIds || [];
+  }, [result]);
+
+  const refreshFieldValues = useCallback(projectedTags => {
+    const requestNumber = ++fieldRequestRef.current;
+    const requestedTags = normalizeFieldTags(projectedTags, Number.POSITIVE_INFINITY);
+    if (!requestedTags.length) {
+      setFieldValues(new Map());
+      setFieldLoading(false);
+      return;
+    }
+
+    setFieldLoading(true);
+    queryFields(requestedTags).then(response => {
+      if (fieldRequestRef.current !== requestNumber) return;
+      setFieldValues(new Map(response.values));
+    }).catch(() => {
+      if (fieldRequestRef.current !== requestNumber) return;
+      setFieldValues(new Map());
+    }).finally(() => {
+      if (fieldRequestRef.current === requestNumber) setFieldLoading(false);
+    });
+  }, [queryFields]);
+
+  const refreshFieldCounts = useCallback((investigationId, nextFilters, messageIds) => {
+    const requestNumber = (fieldCountRequestRef.current.get(investigationId) || 0) + 1;
+    fieldCountRequestRef.current.set(investigationId, requestNumber);
+    setFieldInvestigations(current => current.map(investigation => (
+      investigation.id === investigationId
+        ? { ...investigation, filters: nextFilters, summary: nextFilters.length ? investigation.summary : null, loading: Boolean(nextFilters.length) }
+        : investigation
+    )));
+    if (!nextFilters.length) {
+      return;
+    }
+
+    countFields(nextFilters, messageIds).then(response => {
+      if (fieldCountRequestRef.current.get(investigationId) !== requestNumber) return;
+      setFieldInvestigations(current => current.map(investigation => (
+        investigation.id === investigationId
+          ? { ...investigation, summary: response.summary, loading: false }
+          : investigation
+      )));
+    }).catch(() => {
+      if (fieldCountRequestRef.current.get(investigationId) !== requestNumber) return;
+      setFieldInvestigations(current => current.map(investigation => (
+        investigation.id === investigationId
+          ? { ...investigation, summary: null, loading: false }
+          : investigation
+      )));
+    });
+  }, [countFields]);
+
+  const requestFieldValueHints = useCallback(tag => (
+    getFieldHints(tag, getFieldScopeMessageIds(selectedGroupId))
+  ), [getFieldHints, getFieldScopeMessageIds, selectedGroupId]);
 
   const filteredRecords = useMemo(() => {
     if (!result) return [];
@@ -130,22 +208,39 @@ const VisualBoardPage = () => {
     setSelectedGroupId(id);
     setActiveTab('flow');
     setSelectedRecordId(null);
+    const messageIds = getFieldScopeMessageIds(id);
+    for (const investigation of fieldInvestigations) {
+      refreshFieldCounts(investigation.id, investigation.filters, messageIds);
+    }
   };
 
-  const handleFieldsApply = async tags => {
-    if (!tags.length) {
-      setFieldTags([]);
-      setFieldValues(new Map());
-      return;
+  const handleFiltersChange = nextFilters => setFilters(nextFilters);
+
+  const handleFieldInvestigationChange = (investigationId, nextFilters) => {
+    refreshFieldCounts(investigationId, nextFilters, getFieldScopeMessageIds(selectedGroupId));
+  };
+
+  const handleAddFieldInvestigation = () => {
+    const number = ++fieldInvestigationSequenceRef.current;
+    const investigation = createFieldInvestigation(number);
+    setFieldInvestigations(current => [...current, investigation]);
+    setActiveFieldInvestigationId(investigation.id);
+  };
+
+  const handleCloseFieldInvestigation = investigationId => {
+    if (fieldInvestigations.length === 1) return;
+    const index = fieldInvestigations.findIndex(investigation => investigation.id === investigationId);
+    const remaining = fieldInvestigations.filter(investigation => investigation.id !== investigationId);
+    fieldCountRequestRef.current.set(investigationId, (fieldCountRequestRef.current.get(investigationId) || 0) + 1);
+    setFieldInvestigations(remaining);
+    if (activeFieldInvestigationId === investigationId) {
+      setActiveFieldInvestigationId(remaining[Math.max(0, index - 1)]?.id || remaining[0].id);
     }
-    setFieldLoading(true);
-    try {
-      const response = await worker.queryFields(tags);
-      setFieldTags(response.tags);
-      setFieldValues(new Map(response.values));
-    } finally {
-      setFieldLoading(false);
-    }
+  };
+
+  const handleFieldsApply = requestedTags => {
+    setFieldTags(requestedTags);
+    refreshFieldValues(requestedTags);
   };
 
   const handleClear = () => {
@@ -154,6 +249,12 @@ const VisualBoardPage = () => {
     setSelectedGroupId('all');
     setFieldTags([]);
     setFieldValues(new Map());
+    setFieldInvestigations([createFieldInvestigation(1)]);
+    setActiveFieldInvestigationId('count-1');
+    fieldInvestigationSequenceRef.current = 1;
+    fieldRequestRef.current += 1;
+    fieldCountRequestRef.current.clear();
+    setFieldLoading(false);
     setIsFlowFullscreen(false);
   };
 
@@ -177,7 +278,7 @@ const VisualBoardPage = () => {
           status={worker.status}
           progress={worker.progress}
           error={worker.error}
-          onFile={worker.parseFile}
+          onFiles={worker.parseFiles}
           onText={worker.parseText}
           onCancel={worker.cancel}
         />
@@ -219,7 +320,7 @@ const VisualBoardPage = () => {
                 <div className={isFlowFullscreen ? 'fixed inset-0 z-[45] flex min-h-0 flex-col gap-3 overflow-hidden bg-slate-50 p-3 sm:p-4' : 'space-y-3 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:space-y-0 xl:gap-3'} aria-label={isFlowFullscreen ? 'Full-screen message flow' : undefined}>
                   <BoardToolbar
                     filters={filters}
-                    onFiltersChange={setFilters}
+                    onFiltersChange={handleFiltersChange}
                     messageTypes={Object.keys(result.summary.messageTypeCounts).sort()}
                     fieldTags={fieldTags}
                     onFieldsApply={handleFieldsApply}
@@ -245,10 +346,22 @@ const VisualBoardPage = () => {
                   </div>
                 </div>
               )}
-              {activeTab === 'latency' && <LatencyPanel latency={result.latency} onSelectMessage={setSelectedRecordId} />}
-              {activeTab === 'prices' && <PricesPanel rows={result.prices} onSelectMessage={setSelectedRecordId} />}
-              {activeTab === 'orders' && <OrdersPanel rows={result.orders} onSelectMessage={setSelectedRecordId} />}
-              {activeTab === 'diagnostics' && <DiagnosticsPanel diagnostics={result.diagnostics} onSelectMessage={setSelectedRecordId} />}
+              {activeTab === 'fields' && (
+                <FieldInvestigationPanel
+                  records={fieldScopeRecords}
+                  investigations={fieldInvestigations}
+                  activeInvestigationId={activeFieldInvestigationId}
+                  onSelectInvestigation={setActiveFieldInvestigationId}
+                  onAddInvestigation={handleAddFieldInvestigation}
+                  onCloseInvestigation={handleCloseFieldInvestigation}
+                  onChange={handleFieldInvestigationChange}
+                  tagNames={tags}
+                  availableTags={result.fieldTags}
+                  enums={enums}
+                  onRequestValueHints={requestFieldValueHints}
+                  scopeLabel={selectedGroup?.label || (selectedGroupId === 'ungrouped' ? 'Ungrouped messages' : 'All messages')}
+                />
+              )}
             </section>
           </div>
         </div>

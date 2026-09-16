@@ -29,7 +29,7 @@ const StatCard = ({ icon, label, value, detail, tone = 'blue' }) => {
 const OverviewPanel = ({ result }) => {
   const { summary, groups, diagnostics, latency } = result;
   const typeEntries = Object.entries(summary.messageTypeCounts).sort((left, right) => right[1] - left[1]);
-  const maxTypeCount = Math.max(1, ...typeEntries.map(([, count]) => count));
+  const maxTypeCount = typeEntries.reduce((maximum, [, count]) => Math.max(maximum, count), 1);
   const sessions = Object.entries(summary.sessionCounts).sort((left, right) => right[1] - left[1]);
 
   return (
@@ -80,8 +80,8 @@ const OverviewPanel = ({ result }) => {
             ))}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-            <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Capture samples</p><p className="mt-1 font-mono text-sm font-semibold text-slate-700">{formatInteger(latency.capture.reduce((total, row) => total + row.count, 0))}</p></div>
-            <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Round trips</p><p className="mt-1 font-mono text-sm font-semibold text-slate-700">{formatInteger(latency.roundTrips.length)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Capture samples</p><p className="mt-1 font-mono text-sm font-semibold text-slate-700">{formatInteger(latency.captureSampleCount ?? latency.capture?.reduce((total, row) => total + row.count, 0))}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Round trips</p><p className="mt-1 font-mono text-sm font-semibold text-slate-700">{formatInteger(latency.roundTripCount ?? latency.roundTrips?.length)}</p></div>
           </div>
         </section>
       </div>

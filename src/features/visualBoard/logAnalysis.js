@@ -1,5 +1,6 @@
 import { dictionaryKeyFromBeginString } from '../../utils/dictionaryVersion.js';
 import { findFixMessageStart, SOH, splitFixTokens } from '../../utils/fixDelimiter.js';
+import { getTimestampRange } from './timestampRange.js';
 
 const MESSAGE_TYPE_NAMES = {
   '0': 'Heartbeat',
@@ -169,7 +170,7 @@ const parsePrefix = prefix => {
   };
 };
 
-const scanFix = raw => {
+const scanFix = (raw, includeExtendedAnalytics, availableTags) => {
   const { delimiter, tokens } = splitFixTokens(raw);
   const fields = {};
   const correlationIds = [];
@@ -187,9 +188,11 @@ const scanFix = raw => {
     const tag = token.slice(0, equalsIndex).trim();
     if (!/^\d+$/.test(tag)) continue;
     const value = token.slice(equalsIndex + 1);
+    availableTags?.add(tag);
 
     if (INDEXED_TAGS.has(tag) && fields[tag] === undefined) fields[tag] = value;
 
+    if (!includeExtendedAnalytics) continue;
     if (tag === '269') {
       finalizeMarketEntry();
       currentEntry = { type: value };
@@ -221,7 +224,7 @@ const scanFix = raw => {
     fields,
     correlationIds,
     marketEntries,
-    warnings: validateFixEnvelope(raw, delimiter, fields),
+    warnings: includeExtendedAnalytics ? validateFixEnvelope(raw, delimiter, fields) : null,
   };
 };
 
@@ -231,13 +234,21 @@ const getBestMarketEntry = (entries, type) => {
   return matches[0] || null;
 };
 
-const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
+const compactBoardFields = fields => {
+  const compact = {};
+  for (const tag of BOARD_FIELD_TAGS) {
+    if (fields[tag] !== undefined) compact[tag] = fields[tag];
+  }
+  return compact;
+};
+
+const parseRecordLine = (line, id, lineNumber, sourceOffset, includeExtendedAnalytics, availableTags) => {
   const fixStart = findFixMessageStart(line);
   if (fixStart < 0) return null;
 
   const prefix = parsePrefix(line.slice(0, fixStart));
   const raw = line.slice(fixStart).trimEnd();
-  const scanned = scanFix(raw);
+  const scanned = scanFix(raw, includeExtendedAnalytics, availableTags);
   const fields = scanned.fields;
   const sendingTimeMs = parseFixTimestamp(fields['52']);
   const eventTimestampMs = prefix.logTimestampMs ?? sendingTimeMs;
@@ -248,8 +259,8 @@ const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
     ? prefix.logTimestampMs - sendingTimeMs
     : null;
 
-  const bid = getBestMarketEntry(scanned.marketEntries, '0');
-  const offer = getBestMarketEntry(scanned.marketEntries, '1');
+  const bid = includeExtendedAnalytics ? getBestMarketEntry(scanned.marketEntries, '0') : null;
+  const offer = includeExtendedAnalytics ? getBestMarketEntry(scanned.marketEntries, '1') : null;
   const messageType = fields['35'] || '?';
 
   return {
@@ -259,10 +270,12 @@ const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
     sourceLineEnd: sourceOffset + line.length,
     rawStart: sourceOffset + fixStart,
     rawEnd: sourceOffset + fixStart + raw.length,
-    level: prefix.level,
-    logTimestampRaw: prefix.logTimestampRaw,
-    logTimestampMs: prefix.logTimestampMs,
-    sendingTimeMs,
+    ...(includeExtendedAnalytics ? {
+      level: prefix.level,
+      logTimestampRaw: prefix.logTimestampRaw,
+      logTimestampMs: prefix.logTimestampMs,
+      sendingTimeMs,
+    } : {}),
     eventTimestampMs,
     direction: prefix.direction,
     session,
@@ -271,19 +284,25 @@ const parseRecordLine = (line, id, lineNumber, sourceOffset) => {
     beginString: fields['8'] || null,
     dictionaryVersion: dictionaryKeyFromBeginString(fields['8']),
     messageType,
-    messageName: MESSAGE_TYPE_NAMES[messageType] || `MsgType ${messageType}`,
-    sequenceNumber: /^\d+$/.test(fields['34'] || '') ? Number(fields['34']) : null,
-    fields,
+    ...(includeExtendedAnalytics ? {
+      messageName: MESSAGE_TYPE_NAMES[messageType] || `MsgType ${messageType}`,
+    } : {}),
+    ...(includeExtendedAnalytics ? {
+      sequenceNumber: /^\d+$/.test(fields['34'] || '') ? Number(fields['34']) : null,
+    } : {}),
+    fields: includeExtendedAnalytics ? fields : compactBoardFields(fields),
     correlationIds: scanned.correlationIds,
     captureLagMs,
     roundTripMs: null,
-    warningCodes: scanned.warnings,
-    marketPreview: bid || offer ? {
-      bidPrice: bid?.price ?? null,
-      bidSize: bid?.size ?? null,
-      offerPrice: offer?.price ?? null,
-      offerSize: offer?.size ?? null,
-    } : null,
+    ...(includeExtendedAnalytics ? {
+      warningCodes: scanned.warnings,
+      marketPreview: bid || offer ? {
+        bidPrice: bid?.price ?? null,
+        bidSize: bid?.size ?? null,
+        offerPrice: offer?.price ?? null,
+        offerSize: offer?.size ?? null,
+      } : null,
+    } : {}),
   };
 };
 
@@ -370,23 +389,29 @@ const buildGroups = records => {
     }
   });
 
-  const membersByRoot = new Map();
+  const memberIndexesByRoot = new Map();
   records.forEach((record, index) => {
     if (tokensByRecord[index].length === 0) return;
     const root = dsu.find(index);
-    if (!membersByRoot.has(root)) membersByRoot.set(root, []);
-    membersByRoot.get(root).push(record);
+    if (!memberIndexesByRoot.has(root)) memberIndexesByRoot.set(root, []);
+    memberIndexesByRoot.get(root).push(index);
   });
 
-  const components = [...membersByRoot.values()].sort((left, right) => (
-    (left[0].eventTimestampMs ?? left[0].id) - (right[0].eventTimestampMs ?? right[0].id)
+  const components = [...memberIndexesByRoot.values()].sort((left, right) => (
+    (records[left[0]].eventTimestampMs ?? records[left[0]].id)
+    - (records[right[0]].eventTimestampMs ?? records[right[0]].id)
   ));
 
-  return components.map((members, index) => {
-    const tokens = [...new Set(members.flatMap(record => getRecordTokens(record)))];
+  return components.map((memberIndexes, index) => {
+    const members = memberIndexes.map(recordIndex => records[recordIndex]);
+    const tokenSet = new Set();
+    for (const recordIndex of memberIndexes) {
+      for (const token of tokensByRecord[recordIndex]) tokenSet.add(token);
+    }
+    const tokens = [...tokenSet];
     const type = groupTypeFor(members, tokens);
     const id = `group-${index + 1}`;
-    const timestamps = members.map(record => record.eventTimestampMs).filter(Number.isFinite);
+    const timestampRange = getTimestampRange(members, record => record.eventTimestampMs);
     const messageTypeCounts = {};
     for (const record of members) {
       record.groupId = id;
@@ -412,9 +437,7 @@ const buildGroups = records => {
       label: groupLabelFor(type, members),
       messageIds: members.map(record => record.id),
       messageCount: members.length,
-      startTimestampMs: timestamps.length ? Math.min(...timestamps) : null,
-      endTimestampMs: timestamps.length ? Math.max(...timestamps) : null,
-      durationMs: timestamps.length ? Math.max(...timestamps) - Math.min(...timestamps) : null,
+      ...timestampRange,
       confidence: type === 'session' ? 'context' : members.length > 1 ? 'high' : 'medium',
       messageTypeCounts,
       correlations,
@@ -440,10 +463,13 @@ const summarizeValues = values => {
   };
 };
 
-const buildLatency = (records, groups, recordsById) => {
-  const captureBuckets = new Map();
+const buildLatency = (records, groups, recordsById, includeDistributions = true) => {
+  const captureBuckets = includeDistributions ? new Map() : null;
+  let captureSampleCount = 0;
   for (const record of records) {
     if (!Number.isFinite(record.captureLagMs)) continue;
+    captureSampleCount += 1;
+    if (!includeDistributions) continue;
     const key = `${record.direction}:${record.messageType}`;
     if (!captureBuckets.has(key)) captureBuckets.set(key, []);
     captureBuckets.get(key).push(record.captureLagMs);
@@ -477,7 +503,14 @@ const buildLatency = (records, groups, recordsById) => {
     }
   }
 
+  const counts = {
+    captureSampleCount,
+    roundTripCount: roundTrips.length,
+  };
+  if (!includeDistributions) return counts;
+
   return {
+    ...counts,
     capture: [...captureBuckets.entries()].map(([key, values]) => {
       const [direction, messageType] = key.split(':');
       return {
@@ -491,6 +524,12 @@ const buildLatency = (records, groups, recordsById) => {
     roundTripSummary: summarizeValues(roundTrips.map(item => item.durationMs)),
   };
 };
+
+const buildFlowDiagnostics = (records, skippedLineCount, groups) => ({
+  skippedLineCount,
+  ungroupedMessageCount: records.reduce((count, record) => count + (record.groupId ? 0 : 1), 0),
+  detectedGroupCount: groups.length,
+});
 
 const buildSequenceDiagnostics = records => {
   const stateByStream = new Map();
@@ -637,15 +676,15 @@ const buildSummary = records => {
   const directionCounts = {};
   const sessionCounts = {};
   const versionCounts = {};
-  const timestamps = [];
 
   for (const record of records) {
     increment(messageTypeCounts, record.messageType);
     increment(directionCounts, record.direction);
     increment(sessionCounts, record.session);
     increment(versionCounts, record.beginString || 'Unknown');
-    if (Number.isFinite(record.eventTimestampMs)) timestamps.push(record.eventTimestampMs);
   }
+
+  const timestampRange = getTimestampRange(records, record => record.eventTimestampMs);
 
   return {
     messageCount: records.length,
@@ -653,19 +692,13 @@ const buildSummary = records => {
     directionCounts,
     sessionCounts,
     versionCounts,
-    startTimestampMs: timestamps.length ? Math.min(...timestamps) : null,
-    endTimestampMs: timestamps.length ? Math.max(...timestamps) : null,
-    durationMs: timestamps.length ? Math.max(...timestamps) - Math.min(...timestamps) : null,
+    ...timestampRange,
   };
 };
 
 const compactRecordsForBoard = records => {
   for (const record of records) {
-    const compactFields = {};
-    for (const [tag, value] of Object.entries(record.fields)) {
-      if (BOARD_FIELD_TAGS.has(tag)) compactFields[tag] = value;
-    }
-    record.fields = compactFields;
+    record.fields = compactBoardFields(record.fields);
     delete record.correlationIds;
     delete record.marketPreview;
     delete record.level;
@@ -678,8 +711,16 @@ const compactRecordsForBoard = records => {
   }
 };
 
-export const analyzeLogText = (text, { onProgress } = {}) => {
+const releaseFlowAnalysisFields = records => {
+  for (const record of records) {
+    delete record.correlationIds;
+    delete record.beginString;
+  }
+};
+
+export const analyzeLogText = (text, { onProgress, includeExtendedAnalytics = true } = {}) => {
   const records = [];
+  const availableTags = new Set();
   let skippedLineCount = 0;
   let lineNumber = 0;
   let cursor = 0;
@@ -691,7 +732,14 @@ export const analyzeLogText = (text, { onProgress } = {}) => {
     const line = source.slice(cursor, end).replace(/\r$/, '');
     lineNumber += 1;
 
-    const record = parseRecordLine(line, records.length + 1, lineNumber, cursor);
+    const record = parseRecordLine(
+      line,
+      records.length + 1,
+      lineNumber,
+      cursor,
+      includeExtendedAnalytics,
+      availableTags,
+    );
     if (record) records.push(record);
     else if (line.trim()) skippedLineCount += 1;
 
@@ -702,24 +750,31 @@ export const analyzeLogText = (text, { onProgress } = {}) => {
     cursor = newlineIndex + 1;
   }
 
-  const recordsById = new Map(records.map(record => [record.id, record]));
+  const recordsById = { get: id => records[id - 1] };
   const groups = buildGroups(records);
-  const latency = buildLatency(records, groups, recordsById);
-  const orders = buildOrders(groups, recordsById, latency);
-  const prices = buildLatestPrices(records);
-  const diagnostics = buildDiagnostics(records, skippedLineCount, groups, orders);
+  const latency = buildLatency(records, groups, recordsById, includeExtendedAnalytics);
+  const orders = includeExtendedAnalytics ? buildOrders(groups, recordsById, latency) : null;
+  const prices = includeExtendedAnalytics ? buildLatestPrices(records) : null;
+  const diagnostics = includeExtendedAnalytics
+    ? buildDiagnostics(records, skippedLineCount, groups, orders)
+    : buildFlowDiagnostics(records, skippedLineCount, groups);
   const summary = buildSummary(records);
-  compactRecordsForBoard(records);
+  if (includeExtendedAnalytics) compactRecordsForBoard(records);
+  else releaseFlowAnalysisFields(records);
 
-  return {
+  const result = {
     records,
     groups,
     summary,
     latency,
-    orders,
-    prices,
     diagnostics,
+    fieldTags: [...availableTags].sort((left, right) => Number(left) - Number(right)),
   };
+  if (includeExtendedAnalytics) {
+    result.orders = orders;
+    result.prices = prices;
+  }
+  return result;
 };
 
 export const getMessageTypeName = type => MESSAGE_TYPE_NAMES[type] || `MsgType ${type}`;

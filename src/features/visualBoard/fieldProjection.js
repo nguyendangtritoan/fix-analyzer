@@ -1,6 +1,6 @@
 export const MAX_PROJECTED_FIELDS = 6;
 
-export const normalizeFieldTags = input => {
+export const normalizeFieldTags = (input, maximum = MAX_PROJECTED_FIELDS) => {
   const candidates = Array.isArray(input)
     ? input
     : String(input || '').split(/[\s,]+/);
@@ -18,7 +18,7 @@ export const normalizeFieldTags = input => {
     if (seen.has(tag)) continue;
     seen.add(tag);
     tags.push(tag);
-    if (tags.length === MAX_PROJECTED_FIELDS) break;
+    if (tags.length === maximum) break;
   }
 
   return tags;

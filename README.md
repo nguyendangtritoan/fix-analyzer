@@ -7,24 +7,25 @@ FIX Analyzer is a privacy-first React application for inspecting individual FIX 
 ### Message Analyzer
 
 - Auto-detects consistent FIX field delimiters, including SOH, `^A`, pipe, punctuation, control characters, Unicode, and multi-character markers; bracketed, columnar, and best-effort space-separated text remain supported.
-- Shows a dictionary-enriched, grouped view of one message.
-- Compares two or more messages with aligned fields and repeating groups.
+- Shows all populated messages in separate dictionary-enriched, grouped views side by side.
+- Enables aligned field and repeating-group comparison for two or more messages only when the comparison button is turned on. Columnar enum displays such as `EXECUTIONREPORT ['8']` normalize to their raw FIX codes, and reordered group instances align by delimiter identity with explicit instance rows for duplicate occurrences.
 - Uses bundled FIX 4.0–4.4, IMIX 2.0, and combined IMIXT 1.0/IMIX 2.0 QuickFIX dictionaries, or a locally selected custom XML dictionary.
 - Copies a message as pipe, SOH, bracketed, columnar, or JSON text.
 
 ### Visual Board
 
-Open `#/visual-board` or use the top navigation. The board accepts pasted text and uncompressed `.log`, `.txt`, and `.fix` files up to 1 GB.
+Open `#/visual-board` or use the top navigation. The board accepts pasted text and one or more uncompressed `.log`, `.txt`, and `.fix` files without an application-enforced size limit. Multi-file selections are naturally sorted by filename and analyzed as one continuous dataset; available browser memory is the practical limit.
 
 - Correlates messages into detected RFQ, order, market-data, and session lifecycles.
+- Combines multiple selected or dropped log files locally, preserving lifecycle correlation across file boundaries.
 - Uses exact business identifiers such as `ClOrdID(11)`, `OrigClOrdID(41)`, `OrderID(37)`, `QuoteReqID(131)`, `QuoteID(117)`, and session-scoped `MDReqID(262)`.
 - Shows virtualized chronological flows with distinct `→` outgoing and `←` incoming paths, message type, common IDs, capture lag, and matched `D → 8` round-trip latency.
 - Expands the Flow workspace into a focused full-screen view while preserving filters, field projections, and message details.
-- Fits the loaded desktop workspace to the viewport: detected groups and the active Flow, Quotes & Prices, Orders, or Diagnostics content scroll internally without moving the whole page or their panel headings.
+- Keeps the loaded desktop workspace focused on Overview, Flow, and Field Counts, with detected groups and active content scrolling inside the viewport.
 - Opens any row as a dictionary-enriched message drawer while preserving duplicate fields and the original log line.
 - Projects up to six numeric FIX tags onto separate sequence-board columns while preserving every repeated occurrence.
-- Summarizes message types, directions, sessions, groups, latency, latest quote/market-data prices, orders, executions, rejects, sequence gaps, and envelope checks.
-- Reports skipped input lines rather than silently treating them as FIX messages.
+- Investigates any numeric FIX tag in a dedicated Field Counts tab. Tag hints include every tag currently present in the loaded messages (including custom tags) with dictionary names when available; value hints include every distinct value in the current scope with per-value message counts. Windowed hint menus keep large lists scrollable. Multiple independent comparison tabs keep results such as `35=R` and `35=AG` visible together. Conditions inside one comparison support cumulative AND counts, repeated values, case-insensitive fragments, and `*` wildcards such as `55=USD/*` without changing Flow.
+- Summarizes message types, directions, sessions, groups, time span, and Flow latency counts in Overview.
 - Recognizes versioned FIX-family BeginString values, including `8=IMIXT.1.0`, and automatically activates the matching bundled dictionary.
 - Uses the same automatic delimiter detection as Message Analyzer, so custom separators work consistently in pasted messages and log lines.
 - Copies an entire pasted dataset or one selected detected group as original/raw, pipe-delimited, SOH-delimited, readable bracketed text, or duplicate-preserving JSON. File imports deliberately expose group copy only, never whole-file copy.
@@ -77,8 +78,8 @@ src/
 │   ├── MessageAnalyzerPage.jsx  # Existing parse/diff workflow
 │   └── VisualBoardPage.jsx      # Log-analysis dashboard
 ├── features/visualBoard/
-│   ├── logAnalysis.js           # Pure parsing, grouping, latency, stats, diagnostics
-│   ├── visualBoard.worker.js    # File/text ownership and on-demand detail queries
+│   ├── logAnalysis.js           # Pure parsing, exact-ID grouping, latency, and stats
+│   ├── visualBoard.worker.js    # Source ownership, lean analysis, detail, and cached field queries
 │   └── *.jsx                    # Importer, board, drawer, and analysis panels
 ├── components/                  # Existing message-analysis UI
 ├── utils/                       # FIX and QuickFIX XML parsers/formatters
@@ -93,7 +94,6 @@ Routing is a small native hash router, so the static GitHub Pages deployment doe
 - Round-trip latency currently pairs `New Order Single (D)` with the matching `Execution Report (8)` by `ClOrdID(11)` within its session context.
 - Correlation intentionally ignores broad fields such as symbol or currency to avoid combining unrelated lifecycles.
 - `MDReqID(262)` is session-scoped to prevent identical request IDs on separate sessions from merging.
-- FIX `BodyLength(9)` and `CheckSum(10)` are validated only when the source preserves real SOH framing; otherwise the message remains usable without a misleading failure.
 - Parsing is tolerant by design. A malformed or vendor-specific line may be partially parsed or reported as skipped.
 
 ## Deployment

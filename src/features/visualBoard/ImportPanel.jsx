@@ -7,7 +7,7 @@ const EXAMPLE_LOG = ` INFO [30.07.26 15:17:45.235] outgoing FIX.4.3:CLIENT->VENU
  INFO [30.07.26 15:17:47.902] outgoing FIX.4.3:CLIENT->VENUE:Order: 8=FIX.4.3^A9=100^A35=D^A49=CLIENT^A52=20260730-15:17:47.901^A56=VENUE^A11=ORDER-1001^A117=QUOTE-42^A55=EUR/USD^A54=1^A38=1000^A44=1.15082^A10=000^A
  INFO [30.07.26 15:17:47.974] incoming FIX.4.3:CLIENT->VENUE:Order: 8=FIX.4.3^A9=100^A35=8^A49=VENUE^A52=20260730-15:17:47.969^A56=CLIENT^A11=ORDER-1001^A37=VENUE-9001^A55=EUR/USD^A39=2^A150=2^A10=000^A`;
 
-const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
+const ImportPanel = ({ status, progress, error, onFiles, onText, onCancel }) => {
   const [text, setText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef(null);
@@ -16,7 +16,7 @@ const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
   const handleDrop = event => {
     event.preventDefault();
     setIsDragging(false);
-    onFile(event.dataTransfer.files?.[0]);
+    if (!isProcessing) onFiles(event.dataTransfer.files);
   };
 
   return (
@@ -28,7 +28,7 @@ const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
             Import FIX activity
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-            Paste exchanged messages, a copied Visual Board export, or select an uncompressed text log. FIX delimiters and copied formats are detected automatically.
+            Paste exchanged messages, a copied Visual Board export, or select one or more uncompressed text logs. FIX delimiters and copied formats are detected automatically.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
@@ -47,22 +47,22 @@ const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
         onDrop={handleDrop}
       >
         <Upload className="mb-3 text-slate-400" size={30} />
-        <p className="text-sm font-semibold text-slate-700">Drop an uncompressed .log, .txt, or .fix file</p>
-        <p className="mt-1 text-xs text-slate-400">Compressed files are intentionally not accepted.</p>
+        <p className="text-sm font-semibold text-slate-700">Drop one or more uncompressed .log, .txt, or .fix files</p>
+        <p className="mt-1 text-xs text-slate-400">Files are combined by filename. Browser memory is the practical size limit; compressed files are not accepted.</p>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={isProcessing}
           className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
         >
-          Choose local file
+          Choose local files
         </button>
         <input
           ref={inputRef}
           type="file"
-          accept=".log,.txt,.fix,text/plain"
+          multiple
           className="hidden"
-          onChange={event => { onFile(event.target.files?.[0]); event.target.value = ''; }}
+          onChange={event => { onFiles(event.target.files); event.target.value = ''; }}
         />
       </div>
 
@@ -83,8 +83,8 @@ const ImportPanel = ({ status, progress, error, onFile, onText, onCancel }) => {
       {isProcessing && (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
           <div className="mb-2 flex items-center justify-between text-sm font-semibold text-blue-800">
-            <span>Processing locally…</span>
-            <span>{progress ? `${Math.round((progress.fraction || 0) * 100)}% · ${formatInteger(progress.messageCount)} messages` : 'Preparing file'}</span>
+            <span>{progress?.phase === 'reading' ? `Reading ${formatInteger(progress.fileCount)} local files…` : 'Processing locally…'}</span>
+            <span>{progress?.phase === 'reading' ? 'Preparing analysis' : progress ? `${Math.round((progress.fraction || 0) * 100)}% · ${formatInteger(progress.messageCount)} messages` : 'Preparing files'}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-blue-100">
             <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${Math.max(4, Math.round((progress?.fraction || 0) * 100))}%` }} />

@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const MAX_FILE_BYTES = 1024 * 1024 * 1024;
-const COMPRESSED_EXTENSION = /\.(?:bz2|gz|zip|7z|rar|xz|zst)$/i;
-const TEXT_LOG_NAME = /(?:\.log(?:[.-].*)?|\.txt|\.fix)$/i;
+import { prepareLocalLogFiles } from './fileImport';
 
 const createInitialState = () => ({
   status: 'idle',
@@ -49,7 +46,7 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
         onResultRef.current?.(message.result);
       } else if (message.type === 'error') {
         setState(current => ({ ...current, status: 'error', progress: null, error: message.message }));
-      } else if (message.type === 'message-detail' || message.type === 'fields-result' || message.type === 'dataset-copy-result') {
+      } else if (message.type === 'message-detail' || message.type === 'fields-result' || message.type === 'fields-count-result' || message.type === 'field-hints-result' || message.type === 'dataset-copy-result') {
         const pending = pendingRequestsRef.current.get(message.requestId);
         if (pending) {
           pending.resolve(message);
@@ -90,53 +87,35 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
     return startWorker();
   }, [rejectPendingRequests, startWorker]);
 
-  const parseFile = useCallback(file => {
-    if (!file) return false;
-    if (COMPRESSED_EXTENSION.test(file.name)) {
+  const parseFiles = useCallback(fileList => {
+    const selection = prepareLocalLogFiles(fileList);
+    if (!selection.files.length && !selection.error) return false;
+    if (selection.error) {
       setState(current => ({
         ...current,
         status: 'error',
-        error: 'Compressed files are intentionally unsupported. Decompress the file locally and select the plain log.',
-      }));
-      return false;
-    }
-    if (!TEXT_LOG_NAME.test(file.name) && file.type && !file.type.startsWith('text/')) {
-      setState(current => ({
-        ...current,
-        status: 'error',
-        error: 'Choose an uncompressed .log, .txt, or .fix text file.',
-      }));
-      return false;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setState(current => ({
-        ...current,
-        status: 'error',
-        error: 'This file exceeds the 1 GB local safety limit.',
+        error: selection.error,
       }));
       return false;
     }
 
     const worker = resetWorker();
-    setState({ status: 'processing', progress: null, sourceName: file.name, sourceKind: 'file', result: null, error: null });
-    worker.postMessage({ type: 'parse-file', file });
+    setState({ status: 'processing', progress: null, sourceName: selection.sourceName, sourceKind: 'file', result: null, error: null });
+    worker.postMessage({
+      type: 'parse-files',
+      files: selection.files,
+      sourceName: selection.sourceName,
+    });
     return true;
   }, [resetWorker]);
+
+  const parseFile = useCallback(file => parseFiles(file ? [file] : []), [parseFiles]);
 
   const parseText = useCallback((text, sourceName = 'Pasted log') => {
     if (!String(text || '').trim()) {
       setState(current => ({ ...current, status: 'error', error: 'Paste at least one FIX message or log line.' }));
       return false;
     }
-    if (String(text).length > MAX_FILE_BYTES) {
-      setState(current => ({
-        ...current,
-        status: 'error',
-        error: 'This pasted log exceeds the 1 GB local safety limit.',
-      }));
-      return false;
-    }
-
     const worker = resetWorker();
     setState({ status: 'processing', progress: null, sourceName, sourceKind: 'text', result: null, error: null });
     worker.postMessage({ type: 'parse-text', text, sourceName });
@@ -161,6 +140,16 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
 
   const getMessage = useCallback(id => request({ type: 'get-message', id }), [request]);
   const queryFields = useCallback(tags => request({ type: 'query-fields', tags: tags.map(String) }), [request]);
+  const countFields = useCallback((filters, messageIds = null) => request({
+    type: 'count-fields',
+    filters,
+    messageIds,
+  }), [request]);
+  const getFieldHints = useCallback((tag, messageIds = null) => request({
+    type: 'field-hints',
+    tag,
+    messageIds,
+  }), [request]);
   const copyDataset = useCallback((format, tags, messageIds = null) => request({
     type: 'copy-dataset',
     format,
@@ -170,12 +159,15 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
 
   return {
     ...state,
+    parseFiles,
     parseFile,
     parseText,
     cancel,
     clear,
     getMessage,
     queryFields,
+    countFields,
+    getFieldHints,
     copyDataset,
   };
 };

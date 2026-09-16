@@ -3,7 +3,7 @@ import { ArrowRightLeft, ListIndentIncrease, Play, Plus, Trash2, X } from 'lucid
 import { parseFixMessage } from '../utils/parsers';
 import { TAG_HIGHLIGHT_STYLES } from '../utils/highlightUtils';
 import CopyDropdown from '../components/features/CopyDropdown';
-import SingleView from '../components/features/SingleView';
+import MessagesView from '../components/features/MessagesView';
 import DiffView from '../components/features/DiffView';
 import { useFixDictionary } from '../context/useFixDictionary';
 
@@ -14,7 +14,7 @@ const createInitialMessages = () => [
 
 export default function MessageAnalyzerPage() {
   const [messageInputs, setMessageInputs] = useState(createInitialMessages);
-  const [mode, setMode] = useState("single");
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
   const [groupIndentEnabled, setGroupIndentEnabled] = useState(true);
   const [highlightedTags, setHighlightedTags] = useState([]);
 
@@ -40,20 +40,20 @@ export default function MessageAnalyzerPage() {
     parsedMessages.filter(message => message.value.trim().length > 0)
   ), [parsedMessages]);
 
-  const primaryParsed = parsedMessages[0]?.data || [];
+  const visibleMessages = comparisonMessages.length > 0
+    ? comparisonMessages
+    : parsedMessages.slice(0, 1);
   const canCompare = comparisonMessages.length >= 2;
   const inputGridClass = messageInputs.length <= 2
     ? "grid grid-cols-1 lg:grid-cols-2 gap-6"
     : "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6";
 
   const updateMessageInput = (id, value) => {
-    const populatedBefore = messageInputs.filter(message => message.value.trim().length > 0).length;
     const nextMessages = messageInputs.map(message => message.id === id ? { ...message, value } : message);
     const populatedAfter = nextMessages.filter(message => message.value.trim().length > 0).length;
 
     setMessageInputs(nextMessages);
-    if (populatedBefore < 2 && populatedAfter >= 2) setMode('diff');
-    if (populatedAfter < 2) setMode('single');
+    if (populatedAfter < 2) setComparisonEnabled(false);
   };
 
   const addMessageInput = () => {
@@ -67,7 +67,9 @@ export default function MessageAnalyzerPage() {
     if (messageInputs.length <= 2) return;
     const nextMessages = messageInputs.filter(message => message.id !== id);
     setMessageInputs(nextMessages);
-    if (nextMessages.filter(message => message.value.trim().length > 0).length < 2) setMode('single');
+    if (nextMessages.filter(message => message.value.trim().length > 0).length < 2) {
+      setComparisonEnabled(false);
+    }
   };
 
   const toggleHighlightedTag = (tag) => {
@@ -121,7 +123,7 @@ export default function MessageAnalyzerPage() {
         value: "8=FIX.4.4^A9=120^A35=D^A34=2^A49=TEST^A56=EXEC^A52=20230101-12:00:01^A11=ORDER2^A55=AAPL^A54=2^A38=100^A40=2^A44=190.50^A10=234^A",
       },
     ]);
-    setMode("diff");
+    setComparisonEnabled(false);
   };
 
   return (
@@ -135,7 +137,7 @@ export default function MessageAnalyzerPage() {
               <ArrowRightLeft className="text-blue-600" />
               FIX Analysis & Review Tool
             </h1>
-            <p className="text-slate-500 mt-1">Multi-format parser & visual diff tool</p>
+            <p className="text-slate-500 mt-1">Multi-message parser with optional visual comparison</p>
           </div>
 
           <div className="flex flex-wrap gap-3 items-center">
@@ -152,7 +154,7 @@ export default function MessageAnalyzerPage() {
               <Plus size={16} className="text-blue-600" /> Message
             </button>
             <button
-              onClick={() => { setMessageInputs(createInitialMessages()); setHighlightedTags([]); setMode('single'); }}
+              onClick={() => { setMessageInputs(createInitialMessages()); setHighlightedTags([]); setComparisonEnabled(false); }}
               className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors text-sm font-medium shadow-sm"
             >
               <Trash2 size={16} /> Clear
@@ -185,7 +187,7 @@ export default function MessageAnalyzerPage() {
               </div>
               <textarea
                 className={`w-full h-48 p-4 border rounded-lg font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all resize-none ${message.value ? 'border-slate-300 bg-white' : index === 0 ? 'border-slate-300 bg-white' : 'border-dashed border-slate-300 bg-slate-50'}`}
-                placeholder={index === 0 ? "Paste FIX message here... (e.g. 8=FIX.4.4|9=123...)" : "Paste another message here to compare..."}
+                placeholder={index === 0 ? "Paste FIX message here... (e.g. 8=FIX.4.4|9=123...)" : "Paste another FIX message here..."}
                 value={message.value}
                 onChange={(e) => updateMessageInput(message.id, e.target.value)}
               />
@@ -198,21 +200,20 @@ export default function MessageAnalyzerPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-2">
             <div className="flex flex-wrap items-center gap-4">
               <h2 className="text-lg font-semibold text-slate-800">Analysis Results</h2>
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setMode('single')}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mode === 'single' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Single View
-                </button>
-                <button
-                  onClick={() => setMode('diff')}
-                  disabled={!canCompare}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mode === 'diff' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'}`}
-                >
-                  Comparison Diff
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setComparisonEnabled(enabled => !enabled)}
+                disabled={!canCompare}
+                aria-pressed={comparisonEnabled}
+                title={canCompare ? 'Toggle aligned comparison' : 'Enter at least two messages to compare'}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${comparisonEnabled ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+              >
+                <ArrowRightLeft size={16} />
+                Compare messages
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${comparisonEnabled ? 'bg-blue-500 text-blue-50' : 'bg-slate-100 text-slate-500'}`}>
+                  {comparisonEnabled ? 'On' : 'Off'}
+                </span>
+              </button>
             </div>
             <label className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded text-sm font-medium text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
               <input
@@ -229,9 +230,9 @@ export default function MessageAnalyzerPage() {
             </label>
           </div>
 
-          {mode === 'single' ? (
-            <SingleView
-              data={primaryParsed}
+          {comparisonEnabled ? (
+            <DiffView
+              messages={comparisonMessages}
               tags={tags}
               enums={enums}
               groups={groups}
@@ -240,8 +241,8 @@ export default function MessageAnalyzerPage() {
               onTagClick={toggleHighlightedTag}
             />
           ) : (
-            <DiffView
-              messages={comparisonMessages}
+            <MessagesView
+              messages={visibleMessages}
               tags={tags}
               enums={enums}
               groups={groups}

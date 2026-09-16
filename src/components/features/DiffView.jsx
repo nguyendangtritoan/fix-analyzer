@@ -69,6 +69,7 @@ const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = tru
              const tag = firstItem?.tag;
              const depth = rowItems.find(item => item?.depth !== undefined)?.depth || 0;
              const isHeader = rowItems.some(item => item?.isHeader);
+             const isInstanceHeader = rowItems.some(item => item?.isInstanceHeader);
 
              const values = rowItems.map(item => item?.value);
              const presentValues = values.filter(value => value !== undefined);
@@ -79,9 +80,10 @@ const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = tru
              if (isDiff) rowClass = "bg-yellow-50 hover:bg-yellow-100";
              if (isMissing) rowClass = "bg-red-50 hover:bg-red-100";
              if (isHeader) rowClass = "bg-slate-100 font-bold text-slate-700";
+             if (isInstanceHeader) rowClass = "bg-blue-50/70 font-semibold text-slate-700";
              const highlightClass = getTagHighlightClass(tag, highlightedTags);
              if (highlightClass) {
-                rowClass = isHeader ? `${highlightClass} font-bold text-slate-700` : highlightClass;
+                rowClass = isHeader || isInstanceHeader ? `${highlightClass} font-bold text-slate-700` : highlightClass;
              }
 
              const padding = groupIndentEnabled ? { paddingLeft: `${depth * 20 + 16}px` } : undefined;
@@ -92,7 +94,7 @@ const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = tru
                     <TagBadge tag={tag} />
                  </td>
                  <td className="px-4 py-2 align-top text-blue-600 font-medium">
-                    {getTagName(tag, tags)} {isHeader && "(Group)"}
+                    {getTagName(tag, tags)} {isHeader ? "(Group)" : isInstanceHeader ? "(Instance)" : ''}
                  </td>
                  {mappedMessages.map((message, messageIndex) => {
                    const value = rowItems[messageIndex]?.value;

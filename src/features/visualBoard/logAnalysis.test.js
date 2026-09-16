@@ -58,6 +58,7 @@ test('analyzes log records with an auto-detected custom delimiter', () => {
   assert.equal(result.records[0].fields['11'], 'CUSTOM-DELIMITER');
   assert.equal(result.records[0].fields['55'], 'EUR/USD');
   assert.equal(result.records[0].captureLagMs, 5);
+  assert.deepEqual(result.fieldTags, ['8', '9', '10', '11', '34', '35', '49', '52', '55', '56', '58']);
 });
 
 test('analyzes IMIXT application messages and ignores a truncated trailing fragment', () => {
@@ -132,6 +133,34 @@ test('builds explainable order and market-data groups with distinct latency sema
   assert.equal(result.diagnostics.sequenceGaps.length, 0);
   assert.equal(result.diagnostics.warningCounts['checksum-mismatch'], undefined);
   assert.equal(result.diagnostics.warningCounts['body-length-mismatch'], undefined);
+});
+
+test('flow-focused analysis skips removed panel data while preserving Flow metrics', () => {
+  const session = 'FIX.4.4:CLIENT->VENUE:ExecSession';
+  const order = makeFix([
+    ['35', 'D'], ['34', '1'], ['49', 'CLIENT'], ['52', '20260720-08:08:53.705'], ['56', 'VENUE'],
+    ['11', 'FLOW-ONLY'], ['55', 'BTC/USD'], ['54', '1'], ['38', '10'], ['44', '100.5'],
+  ]);
+  const execution = makeFix([
+    ['35', '8'], ['34', '1'], ['49', 'VENUE'], ['52', '20260720-08:08:53.712'], ['56', 'CLIENT'],
+    ['11', 'FLOW-ONLY'], ['37', 'ORDER-1'], ['55', 'BTC/USD'], ['39', '2'],
+  ]);
+
+  const result = analyzeLogText([
+    line('20.07.26 08:08:53.705', 'outgoing', session, order),
+    line('20.07.26 08:08:53.717', 'incoming', session, execution),
+  ].join('\n'), { includeExtendedAnalytics: false });
+
+  assert.equal('orders' in result, false);
+  assert.equal('prices' in result, false);
+  assert.equal(result.latency.captureSampleCount, 2);
+  assert.equal(result.latency.roundTripCount, 1);
+  assert.equal(result.records[0].roundTripMs, 12);
+  assert.deepEqual(result.diagnostics, {
+    skippedLineCount: 0,
+    ungroupedMessageCount: 0,
+    detectedGroupCount: 1,
+  });
 });
 
 test('does not group common business values without correlation identifiers', () => {

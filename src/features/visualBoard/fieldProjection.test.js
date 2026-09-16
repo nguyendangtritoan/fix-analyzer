@@ -12,6 +12,10 @@ test('normalizes, deduplicates, and limits projected field tags', () => {
     normalizeFieldTags(['8', '9', '35', '49', '52', '56', '270']),
     ['8', '9', '35', '49', '52', '56'].slice(0, MAX_PROJECTED_FIELDS),
   );
+  assert.deepEqual(
+    normalizeFieldTags(['8', '9', '35', '49', '52', '56', '270'], Number.POSITIVE_INFINITY),
+    ['8', '9', '35', '49', '52', '56', '270'],
+  );
 });
 
 test('collects every occurrence of each requested tag in message order', () => {

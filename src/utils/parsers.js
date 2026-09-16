@@ -202,6 +202,12 @@ export const parseQuickFixXml = (xmlString) => {
 // ---------------------------------------------------------
 // Message Parser (Format Normalizer)
 // ---------------------------------------------------------
+const normalizeColumnarValue = rawValue => {
+  const value = String(rawValue || '').trim();
+  const decoratedEnum = value.match(/\s+\[(['"])(.*?)\1\]\s*$/);
+  return decoratedEnum ? decoratedEnum[2] : value;
+};
+
 export const parseFixMessage = (raw) => {
   if (!raw || !raw.trim()) return [];
   let pairs = [];
@@ -224,7 +230,7 @@ export const parseFixMessage = (raw) => {
       // Relaxed regex to catch "NoRelatedSym 146 1"
       const match = line.trim().match(/^[\w\d\s&.]+\s+(\d+)\s+(.*)$/);
       if (match) {
-        pairs.push({ tag: parseInt(match[1]), value: match[2].trim() });
+        pairs.push({ tag: parseInt(match[1]), value: normalizeColumnarValue(match[2]) });
       }
     });
     return pairs;
@@ -290,7 +296,7 @@ const inferRepeatedGroupFields = (pairs, startIndex, groupDef, count) => {
     });
   }
 
-  return new Set(candidateOrder.filter(tag => appearances.get(tag) === windowCount));
+  return new Set(candidateOrder.filter(tag => appearances.get(tag) > 0));
 };
 
 const parseGroupCount = (value) => {
@@ -475,6 +481,22 @@ export const groupify = (pairs, groupDefs) => {
 };
 
 // UI Helper for DiffView
+const getGroupInstanceIdentity = (instance, fallbackIndex) => {
+  const delimiter = instance.find(node => !node.isGroup && node.tag !== undefined);
+  if (!delimiter) {
+    return {
+      delimiter: null,
+      key: `position:${fallbackIndex}`,
+      value: `Instance ${fallbackIndex + 1}`,
+    };
+  }
+  return {
+    delimiter,
+    key: `${delimiter.tag}=${encodeURIComponent(String(delimiter.value ?? ''))}`,
+    value: String(delimiter.value ?? ''),
+  };
+};
+
 export const flattenForDiff = (nodes, prefix = "", depth = 0) => {
   let flat = [];
   const keyCounts = {}; 
@@ -497,8 +519,21 @@ export const flattenForDiff = (nodes, prefix = "", depth = 0) => {
         isHeader: true 
       });
       
+      const identityCounts = new Map();
       node.instances.forEach((inst, instIdx) => {
-        const instFlat = flattenForDiff(inst, `${key}[${instIdx}].`, depth + 1);
+        const identity = getGroupInstanceIdentity(inst, instIdx);
+        const occurrence = (identityCounts.get(identity.key) || 0) + 1;
+        identityCounts.set(identity.key, occurrence);
+        const instanceKey = occurrence === 1 ? identity.key : `${identity.key}#${occurrence}`;
+        const instancePrefix = `${key}[${instanceKey}]`;
+        flat.push({
+          key: `${instancePrefix}.$instance`,
+          tag: identity.delimiter?.tag ?? node.tag,
+          value: occurrence === 1 ? identity.value : `${identity.value} (occurrence ${occurrence})`,
+          depth: depth + 1,
+          isInstanceHeader: true,
+        });
+        const instFlat = flattenForDiff(inst, `${instancePrefix}.`, depth + 1);
         flat = flat.concat(instFlat);
       });
     } else {

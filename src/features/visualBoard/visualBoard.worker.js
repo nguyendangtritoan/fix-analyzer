@@ -1,24 +1,41 @@
-import { collectProjectedFieldValues, normalizeFieldTags } from './fieldProjection';
+import { normalizeFieldTags } from './fieldProjection';
+import { ensureIndexedFields, getIndexedFieldValueHints, projectIndexedFields } from './fieldValueIndex';
+import { createFieldFilter } from './fieldFilter';
+import { summarizeIndexedFieldFilters } from './fieldInvestigation';
 import { analyzeLogText, parseFixPairs } from './logAnalysis';
 import { canCopyDatasetSelection, generateDatasetCopy } from './datasetExport';
 import { normalizeCopiedDatasetPaste } from './datasetImport';
+import { combineLocalLogFiles } from './fileImport';
 
 const messageOffsets = new Map();
+const indexedFieldValues = new Map();
 let datasetText = '';
 let datasetOriginalText = '';
 let datasetSourceKind = null;
 
 const clearDataset = () => {
   messageOffsets.clear();
+  indexedFieldValues.clear();
   datasetText = '';
   datasetOriginalText = '';
   datasetSourceKind = null;
 };
 
+const ensureFieldTags = tags => ensureIndexedFields({
+  index: indexedFieldValues,
+  tags,
+  records: messageOffsets.keys(),
+  getPairs: id => {
+    const offsets = messageOffsets.get(id);
+    return parseFixPairs(datasetText.slice(offsets.start, offsets.end));
+  },
+});
+
 const publishAnalysis = (text, sourceName, sourceKind, originalText = text) => {
   clearDataset();
   const result = analyzeLogText(text, {
-    onProgress: progress => self.postMessage({ type: 'progress', progress }),
+    includeExtendedAnalytics: false,
+    onProgress: progress => self.postMessage({ type: 'progress', progress: { ...progress, phase: 'analyzing' } }),
   });
   datasetText = text;
   datasetOriginalText = originalText;
@@ -50,8 +67,17 @@ self.onmessage = async event => {
   const message = event.data;
 
   try {
-    if (message.type === 'parse-file') {
-      const text = await message.file.text();
+    if (message.type === 'parse-files') {
+      const files = Array.isArray(message.files) ? message.files : [];
+      if (!files.length) throw new Error('Choose at least one local log file.');
+      self.postMessage({
+        type: 'progress',
+        progress: { phase: 'reading', fraction: 0, messageCount: 0, fileCount: files.length },
+      });
+      const text = await combineLocalLogFiles(files);
+      publishAnalysis(text, message.sourceName || `${files.length} local files`, 'file');
+    } else if (message.type === 'parse-file') {
+      const text = await combineLocalLogFiles([message.file]);
       publishAnalysis(text, message.file.name, 'file');
     } else if (message.type === 'parse-text') {
       const originalText = String(message.text || '');
@@ -68,18 +94,46 @@ self.onmessage = async event => {
         pairs: raw ? parseFixPairs(raw) : [],
       });
     } else if (message.type === 'query-fields') {
-      const tags = normalizeFieldTags(message.tags);
-      const values = [];
-      for (const [id, offsets] of messageOffsets) {
-        const raw = datasetText.slice(offsets.start, offsets.end);
-        const projected = collectProjectedFieldValues(parseFixPairs(raw), tags);
-        if (Object.keys(projected).length) values.push([id, projected]);
-      }
+      const tags = normalizeFieldTags(message.tags, Number.POSITIVE_INFINITY);
+      ensureFieldTags(tags);
+      const values = projectIndexedFields({
+        index: indexedFieldValues,
+        tags,
+        recordIds: messageOffsets.keys(),
+      });
       self.postMessage({
         type: 'fields-result',
         requestId: message.requestId,
         tags,
         values,
+      });
+    } else if (message.type === 'count-fields') {
+      const filters = (Array.isArray(message.filters) ? message.filters : [])
+        .map(filter => createFieldFilter(filter?.tag, filter?.value))
+        .filter(Boolean);
+      const tags = normalizeFieldTags(filters.map(filter => filter.tag), Number.POSITIVE_INFINITY);
+      ensureFieldTags(tags);
+      const recordIds = Array.isArray(message.messageIds)
+        ? message.messageIds.filter(id => messageOffsets.has(id))
+        : messageOffsets.keys();
+      self.postMessage({
+        type: 'fields-count-result',
+        requestId: message.requestId,
+        summary: summarizeIndexedFieldFilters(recordIds, indexedFieldValues, filters),
+      });
+    } else if (message.type === 'field-hints') {
+      const tags = normalizeFieldTags([message.tag], 1);
+      const tag = tags[0];
+      if (!tag) throw new Error('Choose a valid numeric FIX tag to see value hints.');
+      ensureFieldTags([tag]);
+      const recordIds = Array.isArray(message.messageIds)
+        ? message.messageIds.filter(id => messageOffsets.has(id))
+        : messageOffsets.keys();
+      self.postMessage({
+        type: 'field-hints-result',
+        requestId: message.requestId,
+        tag,
+        ...getIndexedFieldValueHints({ index: indexedFieldValues, tag, recordIds }),
       });
     } else if (message.type === 'copy-dataset') {
       const requestedIds = Array.isArray(message.messageIds) ? message.messageIds : null;
