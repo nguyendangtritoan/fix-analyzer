@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileDiff, Play, Plus, Trash2, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { FileDiff, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import TextDiffView from '../components/features/TextDiffView';
 
 const createInitialInputs = () => [
@@ -7,13 +7,69 @@ const createInitialInputs = () => [
   { id: 2, value: '' },
 ];
 
+const TextName = ({ message, onRename }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const buttonRef = useRef(null);
+  const finishedRef = useRef(false);
+
+  const finishEditing = (save, restoreFocus = false) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    if (save) onRename(message.id, draft.trim());
+    setEditing(false);
+    if (restoreFocus) requestAnimationFrame(() => buttonRef.current?.focus());
+  };
+
+  return editing ? (
+    <input
+      type="text"
+      autoFocus
+      aria-label={`Name for ${message.defaultLabel}`}
+      value={draft}
+      placeholder={message.defaultLabel}
+      onFocus={event => event.currentTarget.select()}
+      onChange={event => setDraft(event.target.value)}
+      onBlur={() => finishEditing(true)}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === 'Escape') {
+          event.preventDefault();
+          finishEditing(event.key === 'Enter', true);
+        }
+      }}
+      spellCheck={false}
+      className="min-w-0 flex-1 rounded border border-blue-400 bg-white px-2 py-1 text-sm font-bold text-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  ) : (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-label={`Rename ${message.label}`}
+      title="Rename this text"
+      onClick={() => { setDraft(message.name ?? ''); finishedRef.current = false; setEditing(true); }}
+      className="group -ml-1 inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-1 text-left text-sm font-bold text-slate-700 outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500"
+    >
+      <span className="truncate">{message.label}</span>
+      <Pencil size={14} aria-hidden="true" className="shrink-0 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+    </button>
+  );
+};
+
 export default function TextDiffPage() {
   const [inputs, setInputs] = useState(createInitialInputs);
-  const messages = inputs.map((input, index) => ({ ...input, label: `Text ${index + 1}` }));
+  const messages = inputs.map((input, index) => ({
+    ...input,
+    defaultLabel: `Text ${index + 1}`,
+    label: input.name?.trim() || `Text ${index + 1}`,
+  }));
   const hasText = inputs.some(input => input.value.length > 0);
 
   const updateInput = (id, value) => {
     setInputs(current => current.map(input => input.id === id ? { ...input, value } : input));
+  };
+
+  const renameInput = (id, name) => {
+    setInputs(current => current.map(input => input.id === id ? { ...input, name } : input));
   };
 
   const addInput = () => {
@@ -55,7 +111,7 @@ export default function TextDiffPage() {
           {messages.map(message => (
             <div key={message.id} className="space-y-2">
               <div className="flex min-h-8 items-center justify-between gap-3">
-                <label htmlFor={`text-diff-input-${message.id}`} className="text-sm font-bold text-slate-700">{message.label}</label>
+                <TextName message={message} onRename={renameInput} />
                 {inputs.length > 2 && (
                   <button type="button" onClick={() => setInputs(current => current.filter(input => input.id !== message.id))} aria-label={`Remove ${message.label}`} className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 bg-white shadow-sm transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600">
                     <X size={15} />
@@ -64,6 +120,7 @@ export default function TextDiffPage() {
               </div>
               <textarea
                 id={`text-diff-input-${message.id}`}
+                aria-label={message.label}
                 value={message.value}
                 onChange={event => updateInput(message.id, event.target.value)}
                 placeholder="Paste text to compare..."

@@ -49,6 +49,7 @@ No backend exists. Confidential imported content must remain in the current brow
 - `src/utils/fixDelimiter.js`: shared automatic FIX field-delimiter detection and lossless tokenization for both routes.
 - `src/components/features/SingleView.jsx`: dictionary-enriched grouped message rendering, reused by the drawer.
 - `src/components/features/TextDiffView.jsx` and `src/utils/textDiff.js`: browser-local original-text comparison with aligned lines and character highlights.
+- `src/utils/textDiffFolding.js`: whole unchanged-line sections with surrounding context.
 - `src/constants/dictionarySources.js`: metadata for bundled FIX 4.0–4.4, IMIX 2.0, and IMIXT 1.0 dictionaries.
 - `vite.config.js`: embeds dictionary XML at build time and injects the production CSP.
 - `scripts/verify-local-only.mjs`: checks forbidden network APIs, runtime dependencies, and CSP settings.
@@ -77,7 +78,11 @@ Message Analyzer's comparison toolbar only controls parsed FIX field/group compa
 ## Text Diff Behavior
 The comparison card omits an explanatory banner. Its pair-selector row appears only when more than two text inputs exist, avoiding an empty header for the default two-input view.
 
-The Text diff page compares its own original pasted inputs independently of parsing/dictionaries, so ordinary log text is supported. It starts with two empty inputs; comparison updates whenever either contains text, including whitespace-only input or an empty opposite side. Example, Clear, and `+ Text` controls manage only this page's inputs. An empty workspace shows instructions. It aligns unchanged lines, pairs similar replacement lines, and highlights changed characters in blue, removed lines in red, and added lines in green. Line numbers and blank alignment cells preserve source positions; a shared scroll region keeps both sides synchronized. The toolbar contains a line-wrapping toggle, which defaults on. Difference counts and navigation controls are intentionally omitted; the comparison utility returns aligned rows without calculating difference blocks. More than two input slots expose left/right pair selectors; choosing the opposite text swaps the pair. CRLF, CR, and LF are treated as equivalent line endings; all other whitespace, field order, and delimiters are compared literally, and actual SOH is displayed as `␁` without changing the comparison source. A final newline remains visible as an empty last line.
+Each input shows its name as a plain label. Hover or keyboard focus reveals a pencil; clicking the label opens a focused inline editor. Enter or blur saves the trimmed draft, Escape cancels, and keyboard completion returns focus to the rename button. Saved names update the textarea's accessible label, comparison headers, removal buttons, and pair-selector options. Empty or whitespace-only names fall back to `Text N`; custom names stay attached to input IDs when other inputs are removed. Renaming does not alter text, selected pairs, wrapping, or expanded line sections. Example and Clear reset names along with their input data. Names remain in browser memory only.
+
+The Text diff page compares its own original pasted inputs independently of parsing/dictionaries, so ordinary log text is supported. It starts with two empty inputs; comparison updates whenever either contains text, including whitespace-only input or an empty opposite side. Example, Clear, and `+ Text` controls manage only this page's inputs. An empty workspace shows instructions. It aligns unchanged lines, pairs similar replacement lines, and highlights changed characters in light yellow, removed lines in red, and added lines in green. Changed rows have a light blue background with yellow inline highlights and a yellow legend swatch. Line numbers and blank alignment cells preserve source positions; a shared scroll region keeps both sides synchronized. The toolbar contains `Collapse unchanged` (off by default) and `Wrap lines` (on by default). Difference counts and navigation controls are intentionally omitted; the comparison utility returns aligned rows without calculating difference blocks. More than two input slots expose left/right pair selectors; choosing the opposite text swaps the pair. CRLF, CR, and LF are treated as equivalent line endings; all other whitespace, field order, and delimiters are compared literally, and actual SOH is displayed as `␁` without changing the comparison source. A final newline remains visible as an empty last line.
+
+Collapsing retains two unchanged lines beside edits and replaces longer unchanged runs with a `Show … unchanged lines` row when at least three lines can be hidden. Each changed, added, or removed line stays fully visible with its character highlights, including all wrapped screen lines. No character-level folding controls exist. Soft wrapping does not create source lines, so logs where every physical line changes have no fold rows. Individual whole-line sections expand/collapse together across both panes. Source edits reset individual expansions; switching the compared pair resets view controls. Turning the global control off restores all lines, and turning it back on collapses all eligible sections again. Folding only changes presentation and preserves original inputs and line numbers.
 
 ## Visual Board Data Flow
 1. `ImportPanel` accepts pasted text or one or more uncompressed `.log`, `.txt`, and `.fix` files; browser memory is the practical limit.
@@ -142,12 +147,13 @@ Common commands:
 The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check`.
 
 ## Current Baseline (2026-10-26)
-- Ninety-one parser/comparator/correlation, text-diff, delimiter, dictionary composition/version, pagination, time-range, field-filter/count/hint/projection/index, dataset-export/import, multi-file import, large-timestamp-range, message-direction, and nested-scroll-lock tests pass.
+- Ninety-six parser/comparator/correlation, text-diff/folding, delimiter, dictionary composition/version, pagination, time-range, field-filter/count/hint/projection/index, dataset-export/import, multi-file import, large-timestamp-range, message-direction, and nested-scroll-lock tests pass.
 - ESLint passes.
 - Production build passes and includes the strict CSP.
 - Local-only security verification passes.
 - Browser QA covers Message Analyzer side-by-side viewing with explicit comparison on/off, dictionary tag-name hints, dataset value/count hints, independent Field Counts comparison tabs with persistent count badges, count-only isolation from Flow, and reordered/nested repeating-group comparison with a clean browser console.
 - Text-diff browser QA covers the dedicated navigation tab and direct hash route, independent inputs, empty/one-sided/identical text, example/clear and extra-input controls, pair selection, and navigation back to Message Analyzer/Visual Board. Comparison QA covers inserted/removed lines, inline changes, wrapping, and the simplified toolbar without difference counts or navigation controls.
+- Folding QA covers leading/middle unchanged line sections with context, paired expansion/collapse, edit-triggered expansion reset, and restoring the full view. Long changed log lines stay complete without character-level buttons.
 - The embedded FIX XML makes the main bundle exceed Vite's default 500 kB warning threshold; this is an intentional no-runtime-fetch tradeoff.
 
 ## Known Risks and Gotchas
@@ -158,11 +164,52 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - A large input can consume several times its file size in transient browser/worker memory. There is no fixed application ceiling, so the browser or operating system may still terminate analysis when device memory is exhausted. Keep compact records free of raw lines and avoid unnecessary source copies.
 - Each distinct field tag requested by projection or count investigation adds an in-memory per-message index until the dataset is cleared; cached tags trade memory for faster reuse.
 - Repeating-group diff alignment uses delimiter identity plus occurrence order. Groups with duplicate delimiter values but no stable additional identity can still be ambiguous; explicit instance headers make additional/missing occurrences visible.
-- Text diff bounds Myers search history/work and replacement-line alignment. Large unrelated blocks can fall back to positional replacement highlighting while preserving every source character; minimal alignment is best effort in that case. The comparison table renders all aligned lines, so very large raw pastes remain subject to browser rendering/memory limits.
+- Text diff bounds Myers search history/work and replacement-line alignment. Large unrelated blocks can fall back to positional replacement highlighting while preserving every source character; minimal alignment is best effort in that case. The unfolded comparison table renders all aligned lines, so very large raw pastes remain subject to browser rendering/memory limits even though folding reduces visible content.
 - `src/App.css` is unused Vite starter CSS.
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+### 2026-10-26 - Restore Light Blue Row Backgrounds
+- Files: `src/components/features/TextDiffView.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Restored the light blue background for changed rows while keeping yellow highlights on the changed characters and legend swatch.
+- Verification: `npm run lint`, `npm run build`, and `git diff --check` passed. Browser QA confirmed blue rows with yellow text highlights.
+
+### 2026-10-26 - Use Light Yellow for Changed Text
+- Files: `src/components/features/TextDiffView.jsx`, `PROJECT_KNOWLEDGE.md`
+- Summary: Updated changed-line backgrounds, inline changed-text highlights, and the legend swatch to light yellow.
+- Behavior Impact: Text diff uses yellow to identify changed text consistently.
+- Verification: `npm test` passed 96 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser QA confirmed yellow highlights in the comparison.
+
+### 2026-10-26 - Reveal Text Renaming on Hover
+- Files: `src/pages/TextDiffPage.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Replaced permanently visible name fields with plain labels and a pencil revealed on hover or keyboard focus.
+- Behavior Impact: Clicking a name opens its editor; Enter or clicking away saves, and Escape cancels. Editing controls stay hidden at rest.
+- Verification: `npm test` passed 96 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser QA checked resting labels, focused editing, Enter/blur save, Escape cancel, and updated comparison headers.
+
+### 2026-10-26 - Rename Text Inputs
+- Files: `src/pages/TextDiffPage.jsx`, `src/components/features/TextDiffView.jsx`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added editable names above each text input and propagated them through comparison headers, pair selectors, and accessible labels.
+- Behavior Impact: Users can label inputs with filenames or meaningful names; blank names use the existing numbered defaults. Long headers wrap and selectors have bounded widths.
+- Verification: `npm test` passed 96 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser QA confirmed header/selector updates, blank-name fallback, and name retention after removing another input.
+
+### 2026-10-26 - Keep Folding at Line Level
+- Files: `src/components/features/TextDiffView.jsx`, `src/utils/textDiffFolding.js`, `src/utils/textDiffFolding.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Removed inline fragment buttons and their folding logic; simplified comparison segments by removing unused shared fragment identities.
+- Behavior Impact: Only complete unchanged line sections collapse. Changed lines retain their full original text and inline highlights.
+- Verification: `npm test` passed 96 tests; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser QA confirmed character buttons are absent and whole-line sections still expand/collapse across both panes.
+
+### 2026-10-26 - Clarify Inline Unchanged Fragments
+- Files: `src/components/features/TextDiffView.jsx`, `src/utils/textDiffFolding.js`, `src/utils/textDiffFolding.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Replaced subtle inline ellipses with explicit `Show … unchanged characters` controls and documented the distinction between source lines and soft wrapping.
+- Behavior Impact: Long changed log lines expose clear, synchronized fragment expansion even when no entire line is unchanged. Expanded fragments show `Hide unchanged text`.
+- Verification: `npm test` passed 98 tests, including a six-changed-line log regression and Unicode hidden-length checks; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser QA on the supplied logs confirmed visible character expanders, paired expansion, and collapse.
+
+### 2026-10-26 - Collapse Unchanged Text
+- Files: `src/components/features/TextDiffView.jsx`, `src/utils/textDiff.js`, `src/utils/textDiffFolding.js`, `src/utils/textDiffFolding.test.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Added optional folding of unchanged lines and long inline fragments, with shared fragment identities for synchronized expansion across both panes.
+- Behavior Impact: `Collapse unchanged` focuses the comparison on edits while retaining nearby context, original line numbers, and expandable access to hidden text. It defaults off; disabling it restores the full comparison.
+- Verification: `npm test` passed 97 tests, including six folding/context/Unicode/source-preservation cases; `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser QA verified real long log fragments, synchronized inline expansion, line-section expansion, edit reset, and the global toggle.
+
 ### 2026-10-26 - Remove Text Diff Explanatory Banner
 - Files: `src/components/features/TextDiffView.jsx`, `PROJECT_KNOWLEDGE.md`
 - Summary: Removed the redundant explanatory sentence above the comparison and render its header row only when extra inputs require pair selectors.

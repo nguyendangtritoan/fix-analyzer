@@ -18,6 +18,8 @@ Open `#/text-diff` or use the **Text diff** tab beside Message Analyzer and Visu
 
 - Aligns lines and highlights changed characters, added lines, and removed lines.
 - Includes line numbers, optional line wrapping, an example, and Clear.
+- Hover over a text name to reveal its rename control, then click to edit. Enter or clicking away saves; Escape cancels. Saved names update comparison headers and pair selectors; an empty name uses `Text 1`, `Text 2`, and so on.
+- **Collapse unchanged** hides whole unchanged sections behind **Show … unchanged lines**. Click a hidden section to expand it in both panes, or turn the control off to show everything. Changed lines retain their full text and character highlights.
 - Add more inputs with **+ Text**, then choose the left/right pair to compare.
 - Works directly with the original text without FIX parsing or dictionary controls.
 
