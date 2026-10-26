@@ -1,14 +1,16 @@
 import React from 'react';
-import { ArrowRightLeft, LayoutDashboard, LockKeyhole, Network } from 'lucide-react';
+import { ArrowRightLeft, FileDiff, LayoutDashboard, LockKeyhole, Network } from 'lucide-react';
 import DictionaryControls from '../components/features/DictionaryControls';
 import { useFixDictionary } from '../context/useFixDictionary';
 import MessageAnalyzerPage from '../pages/MessageAnalyzerPage';
 import VisualBoardPage from '../pages/VisualBoardPage';
+import TextDiffPage from '../pages/TextDiffPage';
 import { useHashRoute } from './useHashRoute';
 
 const navigation = [
   { path: '/', label: 'Message Analyzer', icon: ArrowRightLeft },
   { path: '/visual-board', label: 'Visual Board', icon: LayoutDashboard },
+  { path: '/text-diff', label: 'Text diff', icon: FileDiff },
 ];
 
 const AppShell = () => {
@@ -31,7 +33,7 @@ const AppShell = () => {
               </span>
             </a>
 
-            <nav className="flex rounded-lg bg-slate-100 p-1" aria-label="Primary navigation">
+            <nav className="flex flex-wrap rounded-lg bg-slate-100 p-1" aria-label="Primary navigation">
               {navigation.map(item => {
                 const Icon = item.icon;
                 const isActive = activeRoute === item.path;
@@ -57,7 +59,7 @@ const AppShell = () => {
               <LockKeyhole size={13} />
               Local only
             </div>
-            <DictionaryControls
+            {activeRoute !== '/text-diff' && <DictionaryControls
               mode={dictionary.mode}
               setMode={dictionary.setMode}
               activeDict={dictionary.activeName}
@@ -65,13 +67,13 @@ const AppShell = () => {
               customFileName={dictionary.customFileName}
               onFileUpload={dictionary.handleFileUpload}
               onClearCustom={dictionary.clearCustomDictionary}
-            />
+            />}
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1600px]">
-        {activeRoute === '/visual-board' ? <VisualBoardPage /> : <MessageAnalyzerPage />}
+        {activeRoute === '/visual-board' ? <VisualBoardPage /> : activeRoute === '/text-diff' ? <TextDiffPage /> : <MessageAnalyzerPage />}
       </main>
     </div>
   );

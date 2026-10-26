@@ -168,7 +168,7 @@ export default function MessageAnalyzerPage() {
             <div key={message.id} className="space-y-2">
               <div className="flex justify-between items-center gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <label className="text-sm font-bold text-slate-700 whitespace-nowrap">{message.label}</label>
+                  <label htmlFor={`message-input-${message.id}`} className="text-sm font-bold text-slate-700 whitespace-nowrap">{message.label}</label>
                   <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded whitespace-nowrap">Detected: {message.data.length} Tags</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -186,6 +186,7 @@ export default function MessageAnalyzerPage() {
                 </div>
               </div>
               <textarea
+                id={`message-input-${message.id}`}
                 className={`w-full h-48 p-4 border rounded-lg font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all resize-none ${message.value ? 'border-slate-300 bg-white' : index === 0 ? 'border-slate-300 bg-white' : 'border-dashed border-slate-300 bg-slate-50'}`}
                 placeholder={index === 0 ? "Paste FIX message here... (e.g. 8=FIX.4.4|9=123...)" : "Paste another FIX message here..."}
                 value={message.value}

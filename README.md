@@ -12,6 +12,15 @@ FIX Analyzer is a privacy-first React application for inspecting individual FIX 
 - Uses bundled FIX 4.0–4.4, IMIX 2.0, and combined IMIXT 1.0/IMIX 2.0 QuickFIX dictionaries, or a locally selected custom XML dictionary.
 - Copies a message as pipe, SOH, bracketed, columnar, or JSON text.
 
+### Text diff
+
+Open `#/text-diff` or use the **Text diff** tab beside Message Analyzer and Visual Board. Paste text, logs, or raw FIX messages into its independent inputs; comparison updates as you type, including when one side is empty.
+
+- Aligns lines and highlights changed characters, added lines, and removed lines.
+- Includes line numbers, optional line wrapping, an example, and Clear.
+- Add more inputs with **+ Text**, then choose the left/right pair to compare.
+- Works directly with the original text without FIX parsing or dictionary controls.
+
 ### Visual Board
 
 Open `#/visual-board` or use the top navigation. The board accepts pasted text and one or more uncompressed `.log`, `.txt`, and `.fix` files without an application-enforced size limit. Multi-file selections are naturally sorted by filename and analyzed as one continuous dataset; available browser memory is the practical limit.
