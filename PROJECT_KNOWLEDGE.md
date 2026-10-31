@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-10-26
+Last Updated: 2026-10-31
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with three browser-only workflows:
@@ -74,6 +74,12 @@ No backend exists. Confidential imported content must remain in the current brow
 `groupify` selects a `MsgType(35)` schema, renders nested repeating groups, and infers optional dictionary-missing member tags from any complete delimiter-to-delimiter instance window. All populated inputs render as independent grouped message tables side by side by default. Comparison is opt-in through the results-toolbar button and is available with at least two populated messages. Columnar display values ending in quoted raw codes (for example `EXECUTIONREPORT ['8']`) normalize to those raw codes before schema selection and comparison. `flattenForDiff` aligns group instances by delimiter tag/value identity rather than ordinal position, adds occurrence suffixes for duplicate identities, and emits visible instance-header rows. Matching tags can be highlighted with multiple colors and visual indentation can be toggled independently of grouping.
 
 Message Analyzer's comparison toolbar only controls parsed FIX field/group comparison. Raw text comparison lives in the separate Text diff tab.
+
+Independent messages and the Visual Board Pretty drawer share the compact navy `SingleView` panel. It uses 13px monospace text, approximately 20px field rows, a 48px right-aligned tag column, and a bounded field-name column so values retain space. Session fields are muted; dictionary enum labels precede raw codes in parentheses. Repeating groups use colored text, field-name indentation, accessible expand/collapse buttons, and small gaps between instances instead of extra instance-header rows. Instance labels remain available to screen readers. Tag buttons support keyboard highlighting and preserve matching-tag selection across messages. On narrow containers, the table scrolls locally below a 440px minimum width; long values wrap without truncation. `SingleView.css` scopes these styles; the comparison table retains its existing presentation and raw-value-first format.
+
+Currency(15) values and slash-separated currency pairs in Symbol(55), such as `USD/NOK`, use pink text in the compact message view. Other symbols retain their regular styling. Manual row highlights use a darker rose foreground for these values to preserve contrast against the pale selected background.
+
+Clicking a rendered value toggles a separate purple text highlight for every occurrence of that numeric tag, including repeating-group entries and other displayed messages. Tag/name clicks retain whole-row highlighting. Value highlights are shared across independent and comparison views; the drawer maintains its own set across record navigation and Pretty/Raw switches. Native value buttons support Enter/Space, pressed-state semantics, and tooltips. Value clicks do not bubble to the row; dragging to select text does not toggle highlights. Highlighted currencies temporarily use purple and restore their pink accent when cleared. Light table/selected-row backgrounds use darker purple for contrast, while compact navy panels use pale purple. `Clear value highlights` leaves row highlights and inputs intact; the main Clear action resets both kinds of highlight. State is held only in memory and never changes source data or copy/export output.
 
 ## Text Diff Behavior
 The comparison card omits an explanatory banner. Its pair-selector row appears only when more than two text inputs exist, avoiding an empty header for the default two-input view.
@@ -169,6 +175,24 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+
+### 2026-10-31 - User-Controlled Value Highlights
+- Files: `src/components/ui/RowValue.jsx`, `src/components/ui/RowValue.css`, `src/components/features/SingleView.jsx`, `src/components/features/SingleView.css`, `src/components/features/MessagesView.jsx`, `src/components/features/DiffView.jsx`, `src/pages/MessageAnalyzerPage.jsx`, `src/features/visualBoard/MessageDrawer.jsx`, `docs/screenshots/compact-value-highlights.jpg`, `design-qa.md`, `PROJECT_KNOWLEDGE.md`.
+- Summary: Added click-to-toggle purple value text, matching the reference's purple PartyID values among yellow group fields. Added a short usage hint and a dedicated clear action.
+- Behavior Impact: Repeated tags and side-by-side messages share the value highlight, independently of whole-row selection. Keyboard activation, group expansion, comparison switching, and drawer navigation preserve the appropriate state. Currency and group colors return when the highlight is removed.
+- Verification: `npm run lint`, `npm run build`, all 96 existing tests, and `git diff --check` passed. Browser checks verified repeated/nested groups, group-count values, keyboard activation, row/value highlight independence and contrast, currency restoration, multiple messages, missing diff cells, clear actions, and drawer record/Pretty/Raw navigation. Screenshot visually compared with the supplied reference.
+
+### 2026-10-30 - Highlight Currency Values
+- Files: `src/components/ui/RowValue.jsx`, `src/components/features/SingleView.css`, `docs/screenshots/compact-currency-highlights.jpg`, `design-qa.md`, `PROJECT_KNOWLEDGE.md`.
+- Summary: Added the reference's pink accent for Currency(15) and slash-separated currency pairs in Symbol(55) in compact message panels.
+- Behavior Impact: Currency text remains distinct inside selected rows by using a darker rose on pale highlight backgrounds. Non-currency symbols and the diff presentation retain their existing colors.
+- Verification: Lint and production build passed. Browser inspection confirmed pink `USD` and `USD/NOK` values and darker rose while the Currency row is selected; a screenshot captures the result.
+
+### 2026-10-30 - Compact FIX Message Panels
+- Files: `src/components/features/SingleView.jsx`, `src/components/features/SingleView.css`, `src/components/features/MessagesView.jsx`, `src/components/ui/RowValue.jsx`, `design-qa.md`, `docs/screenshots/compact-fix-message.jpg`, `docs/screenshots/compact-fix-message-page.jpg`, `docs/screenshots/compact-message-drawer.jpg`, `PROJECT_KNOWLEDGE.md`.
+- Summary: Replaced spacious message tables with compact navy panels based on the supplied reference, including message-type titles, narrow tags, descriptive enums, and colored repeating groups.
+- Behavior Impact: More fields fit in a screenshot in Message Analyzer and the Visual Board drawer. Group expansion, indentation, matching-tag highlighting, original values, and diff behavior remain available. No parser, dictionary, persistence, or network behavior changed.
+- Verification: `npm run lint`, `npm run build`, and all 96 existing tests passed. Browser checks covered pipe/SOH/columnar input, nested and repeated groups, collapse/expand, keyboard and matching-tag highlights, indentation toggle, two-message layout, comparison, long values, narrow-screen scrolling, dictionary auto-detection, and the Visual Board Pretty drawer. No browser warnings/errors were reported. Visual evidence and accepted reference differences are recorded in `design-qa.md`.
 ### 2026-10-26 - Restore Light Blue Row Backgrounds
 - Files: `src/components/features/TextDiffView.jsx`, `PROJECT_KNOWLEDGE.md`
 - Summary: Restored the light blue background for changed rows while keeping yellow highlights on the changed characters and legend swatch.

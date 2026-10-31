@@ -17,6 +17,11 @@ export default function MessageAnalyzerPage() {
   const [comparisonEnabled, setComparisonEnabled] = useState(false);
   const [groupIndentEnabled, setGroupIndentEnabled] = useState(true);
   const [highlightedTags, setHighlightedTags] = useState([]);
+  const [highlightedValueTags, setHighlightedValueTags] = useState([]);
+
+  const toggleValueHighlight = tag => {
+    setHighlightedValueTags(current => current.includes(tag) ? current.filter(item => item !== tag) : [...current, tag]);
+  };
 
   const {
     tags,
@@ -154,7 +159,7 @@ export default function MessageAnalyzerPage() {
               <Plus size={16} className="text-blue-600" /> Message
             </button>
             <button
-              onClick={() => { setMessageInputs(createInitialMessages()); setHighlightedTags([]); setComparisonEnabled(false); }}
+              onClick={() => { setMessageInputs(createInitialMessages()); setHighlightedTags([]); setHighlightedValueTags([]); setComparisonEnabled(false); }}
               className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors text-sm font-medium shadow-sm"
             >
               <Trash2 size={16} /> Clear
@@ -231,6 +236,15 @@ export default function MessageAnalyzerPage() {
             </label>
           </div>
 
+          {comparisonMessages.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+              <p>Click a value to highlight its tag’s values. Click again to clear.</p>
+              {highlightedValueTags.length > 0 && (
+                <button type="button" onClick={() => setHighlightedValueTags([])} className="font-medium text-violet-700 underline underline-offset-2">Clear value highlights</button>
+              )}
+            </div>
+          )}
+
           {comparisonEnabled ? (
             <DiffView
               messages={comparisonMessages}
@@ -240,6 +254,8 @@ export default function MessageAnalyzerPage() {
               groupIndentEnabled={groupIndentEnabled}
               highlightedTags={highlightedTags}
               onTagClick={toggleHighlightedTag}
+              highlightedValueTags={highlightedValueTags}
+              onValueClick={toggleValueHighlight}
             />
           ) : (
             <MessagesView
@@ -250,6 +266,8 @@ export default function MessageAnalyzerPage() {
               groupIndentEnabled={groupIndentEnabled}
               highlightedTags={highlightedTags}
               onTagClick={toggleHighlightedTag}
+              highlightedValueTags={highlightedValueTags}
+              onValueClick={toggleValueHighlight}
             />
           )}
         </div>

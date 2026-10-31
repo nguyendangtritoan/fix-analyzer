@@ -5,7 +5,7 @@ import { getTagName } from '../../utils/fixUtils';
 import { groupify, flattenForDiff } from '../../utils/parsers';
 import { getTagHighlightClass } from '../../utils/highlightUtils';
 
-const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = true, highlightedTags, onTagClick }) => {
+const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = true, highlightedTags, onTagClick, highlightedValueTags = [], onValueClick }) => {
   const groupedMessages = useMemo(() => (
     messages.map(message => ({
       ...message,
@@ -105,7 +105,7 @@ const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = tru
                        key={message.id}
                        className={`px-4 py-2 font-mono align-top ${isLastMessage ? '' : 'border-r border-gray-200'} ${value === undefined ? 'italic text-gray-400' : ''}`}
                      >
-                       {value !== undefined ? <RowValue tag={tag} value={value} enums={enums} /> : 'MISSING'}
+                       {value !== undefined ? <RowValue tag={tag} value={value} enums={enums} highlighted={highlightedValueTags.includes(tag)} onValueClick={onValueClick} /> : 'MISSING'}
                      </td>
                    );
                  })}

@@ -1,0 +1,18 @@
+.fix-value-button {
+  max-width: 100%;
+  border-radius: 2px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.fix-value-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.fix-value-highlight {
+  color: var(--fix-value-highlight-color, #7e22ce);
+  font-weight: 600;
+}

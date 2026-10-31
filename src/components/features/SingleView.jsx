@@ -1,207 +1,176 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
-import TagBadge from '../ui/TagBadge';
+import { ChevronRight, ChevronDown, CornerDownRight } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import RowValue from '../ui/RowValue';
 import { getTagName } from '../../utils/fixUtils';
 import { groupify } from '../../utils/parsers';
 import { getTagHighlightClass } from '../../utils/highlightUtils';
+import './SingleView.css';
 
-// Deterministic colors for group depths to make visual scanning easier
-const DEPTH_COLORS = [
-  'bg-blue-400',
-  'bg-emerald-400',
-  'bg-amber-400',
-  'bg-purple-400',
-  'bg-rose-400',
-  'bg-cyan-400',
-];
+const GROUP_COLORS = ['#fcd34d', '#6ee7b7', '#c4b5fd', '#67e8f9', '#fda4af', '#fdba74'];
+const SESSION_TAGS = new Set([8, 9, 35, 34, 49, 50, 52, 56, 57, 43, 97, 122, 115, 116, 128, 129, 142, 143, 144, 145, 10]);
 
-const getDepthColor = (depth) => DEPTH_COLORS[depth % DEPTH_COLORS.length];
-
-const IndentationGuides = ({ depth, enabled }) => {
-  if (!enabled || depth <= 0) return null;
-
-  return (
-    <div className="absolute top-0 bottom-0 left-0 flex pointer-events-none select-none h-full">
-      {Array.from({ length: depth }).map((_, i) => (
-        <div
-          key={i}
-          className={`w-[2px] h-full ${getDepthColor(i)} opacity-30`}
-          style={{
-            left: `${(i * 24) + 11}px`, // Center the line within the 24px indentation slot
-            position: 'absolute'
-          }}
-        />
-      ))}
-    </div>
-  );
+const getRowClass = (node, highlightedTags, instanceStart, onTagClick) => {
+  const highlight = getTagHighlightClass(node.tag, highlightedTags);
+  return [
+    highlight ? `${highlight} is-highlighted` : '',
+    !node.isGroup && SESSION_TAGS.has(node.tag) ? 'fix-session-row' : '',
+    node.isGroup ? 'fix-group-row' : '',
+    instanceStart ? 'fix-instance-start' : '',
+    onTagClick ? 'fix-clickable-row' : '',
+  ].filter(Boolean).join(' ');
 };
 
-const getIndentStyle = (depth, enabled, offset = 0) => (
-  enabled ? { paddingLeft: `${depth * 24 + offset}px` } : undefined
+const TagCell = ({ tag, highlightedTags, onTagClick }) => (
+  <td className="fix-tag-cell">
+    {onTagClick ? (
+      <button
+        type="button"
+        className="fix-tag-button"
+        aria-label={`Highlight tag ${tag}`}
+        aria-pressed={highlightedTags?.some(item => item.tag === tag) || false}
+        onClick={event => {
+          event.stopPropagation();
+          onTagClick(tag);
+        }}
+      >
+        {tag}
+      </button>
+    ) : tag}
+  </td>
 );
 
-const getRowClass = (tag, highlightedTags) => (
-  getTagHighlightClass(tag, highlightedTags) || ''
+const FieldName = ({ node, depth, tags, groupIndentEnabled, children, instanceLabel }) => (
+  <td className="fix-name-cell">
+    <div className="fix-field-name" style={{ paddingLeft: groupIndentEnabled ? depth * 12 : 0 }}>
+      {instanceLabel && <span className="sr-only">{instanceLabel}. </span>}
+      {children || (depth > 0 && groupIndentEnabled && <CornerDownRight size={12} aria-hidden="true" />)}
+      <span>{getTagName(node.tag, tags)}</span>
+    </div>
+  </td>
 );
 
-const LeafRow = ({ node, depth, tags, enums, groupIndentEnabled, highlightedTags, onTagClick }) => (
+const LeafRow = ({ node, depth, color, tags, enums, groupIndentEnabled, highlightedTags, onTagClick, highlightedValueTags, onValueClick, instanceStart, instanceLabel }) => (
   <tr
-    className={`${getRowClass(node.tag, highlightedTags)} cursor-pointer border-b border-slate-100`}
+    className={getRowClass(node, highlightedTags, instanceStart, onTagClick)}
+    style={color ? { '--fix-group-color': color } : undefined}
     onClick={() => onTagClick?.(node.tag)}
   >
-    <td className="px-4 py-2 whitespace-nowrap relative min-w-[200px]">
-      <IndentationGuides depth={depth} enabled={groupIndentEnabled} />
-      <div className="flex items-center relative z-10" style={getIndentStyle(depth, groupIndentEnabled)}>
-        <div className="w-5 mr-1" /> {/* Spacer to align with Group chevrons */}
-        <TagBadge tag={node.tag} />
-      </div>
-    </td>
-    <td className="px-6 py-2 whitespace-nowrap font-medium text-blue-600 text-sm relative">
-       {getTagName(node.tag, tags)}
-    </td>
-    <td className="px-6 py-2 font-mono text-gray-800 break-all text-sm relative">
-       <RowValue tag={node.tag} value={node.value} enums={enums} />
+    <TagCell tag={node.tag} highlightedTags={highlightedTags} onTagClick={onTagClick} />
+    <FieldName node={node} depth={depth} tags={tags} groupIndentEnabled={groupIndentEnabled} instanceLabel={instanceLabel} />
+    <td className="fix-value-cell">
+      <RowValue tag={node.tag} value={node.value} enums={enums} compact highlighted={highlightedValueTags.includes(node.tag)} onValueClick={onValueClick} />
     </td>
   </tr>
 );
 
-const GroupRow = ({ node, depth, tags, enums, groupIndentEnabled, highlightedTags, onTagClick }) => {
+const GroupRow = ({ node, depth, colorIndex, tags, enums, groupIndentEnabled, highlightedTags, onTagClick, highlightedValueTags, onValueClick, instanceStart, instanceLabel }) => {
   const [isExpanded, setIsExpanded] = useState(true);
-
-  // The color for THIS group's bar (which will appear in children)
-  const groupColorClass = getDepthColor(depth);
+  const name = getTagName(node.tag, tags);
+  const color = GROUP_COLORS[colorIndex % GROUP_COLORS.length];
 
   return (
     <>
       <tr
-        className={`${getRowClass(node.tag, highlightedTags)} cursor-pointer border-b border-slate-100`}
+        className={getRowClass(node, highlightedTags, instanceStart, onTagClick)}
+        style={{ '--fix-group-color': color }}
         onClick={() => onTagClick?.(node.tag)}
       >
-        <td className="px-4 py-2 whitespace-nowrap relative min-w-[200px]">
-           <IndentationGuides depth={depth} enabled={groupIndentEnabled} />
-
-           {/* Current Group Header Content */}
-           <div className="flex items-center relative z-10" style={getIndentStyle(depth, groupIndentEnabled)}>
-              <button
-                type="button"
-                className={`w-5 h-5 flex items-center justify-center mr-1 rounded hover:bg-slate-200 text-slate-500 transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsExpanded(!isExpanded);
-                }}
-              >
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-              <TagBadge tag={node.tag} />
-           </div>
-
-           {/* Active Vertical Bar highlight for the group header itself */}
-           {groupIndentEnabled && (
-             <div
-               className={`absolute top-0 bottom-0 w-[3px] ${groupColorClass}`}
-               style={{ left: `${(depth * 24) + 11}px` }}
-             />
-           )}
-        </td>
-        <td className="px-6 py-2 font-bold text-slate-700 text-sm">
-          {getTagName(node.tag, tags)} <span className="text-xs font-normal text-slate-400 ml-1">(Group)</span>
-        </td>
-        <td className="px-6 py-2 font-mono text-sm text-slate-600">
-          <span className="bg-slate-100 px-2 py-0.5 rounded text-xs font-bold border border-slate-200">
-             {node.value} {parseInt(node.value) === 1 ? 'Instance' : 'Instances'}
-          </span>
-          {!isExpanded && <span className="ml-2 text-slate-400 italic text-xs">- Collapsed</span>}
+        <TagCell tag={node.tag} highlightedTags={highlightedTags} onTagClick={onTagClick} />
+        <FieldName node={node} depth={depth} tags={tags} groupIndentEnabled={groupIndentEnabled} instanceLabel={instanceLabel}>
+          <button
+            type="button"
+            className="fix-group-toggle"
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${name}`}
+            aria-expanded={isExpanded}
+            onClick={event => {
+              event.stopPropagation();
+              setIsExpanded(expanded => !expanded);
+            }}
+          >
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        </FieldName>
+        <td className="fix-value-cell">
+          <RowValue tag={node.tag} value={node.value} enums={enums} compact highlighted={highlightedValueTags.includes(node.tag)} onValueClick={onValueClick} />
+          {!isExpanded && <span className="fix-raw-value"> (collapsed)</span>}
         </td>
       </tr>
-
       {isExpanded && node.instances.map((instanceNodes, index) => (
-        <React.Fragment key={`group-${node.tag}-inst-${index}`}>
-           {/* Instance Separator / Header */}
-           <tr className="bg-slate-50/30">
-             <td colSpan={3} className="px-4 py-1 relative">
-                <IndentationGuides depth={depth + 1} enabled={groupIndentEnabled} />
-                <div
-                  className="flex items-center text-[10px] font-bold uppercase tracking-wider text-slate-400"
-                  style={getIndentStyle(depth + 1, groupIndentEnabled, 6)}
-                >
-                   Instance {index + 1}
-                </div>
-             </td>
-           </tr>
-           {/* Render Children of this instance */}
-           <NodeRenderer
-             nodes={instanceNodes}
-             depth={depth + 1}
-             tags={tags}
-             enums={enums}
-             groupIndentEnabled={groupIndentEnabled}
-             highlightedTags={highlightedTags}
-             onTagClick={onTagClick}
-           />
-        </React.Fragment>
-      ))}
-    </>
-  );
-};
-
-const NodeRenderer = ({ nodes, depth, tags, enums, groupIndentEnabled, highlightedTags, onTagClick }) => {
-  return nodes.map((node, i) => {
-    if (node.isGroup) {
-      return (
-        <GroupRow
-          key={`${node.tag}-${i}`}
-          node={node}
-          depth={depth}
+        <NodeRenderer
+          key={`group-${node.tag}-inst-${index}`}
+          nodes={instanceNodes}
+          depth={depth + 1}
+          colorIndex={colorIndex}
           tags={tags}
           enums={enums}
           groupIndentEnabled={groupIndentEnabled}
           highlightedTags={highlightedTags}
           onTagClick={onTagClick}
+          highlightedValueTags={highlightedValueTags}
+          onValueClick={onValueClick}
+          instanceStart={index > 0}
+          instanceLabel={`Instance ${index + 1} of ${name}`}
         />
-      );
+      ))}
+    </>
+  );
+};
+
+const NodeRenderer = ({ nodes, depth, colorIndex = -1, instanceStart, instanceLabel, ...props }) => {
+  let groupIndex = colorIndex;
+  return nodes.map((node, index) => {
+    const rowProps = {
+      ...props,
+      node,
+      depth,
+      instanceStart: index === 0 && instanceStart,
+      instanceLabel: index === 0 ? instanceLabel : undefined,
+    };
+    if (node.isGroup) {
+      groupIndex += 1;
+      return <GroupRow key={`${node.tag}-${index}`} {...rowProps} colorIndex={groupIndex} />;
     }
-    return (
-      <LeafRow
-        key={`${node.tag}-${i}`}
-        node={node}
-        depth={depth}
-        tags={tags}
-        enums={enums}
-        groupIndentEnabled={groupIndentEnabled}
-        highlightedTags={highlightedTags}
-        onTagClick={onTagClick}
-      />
-    );
+    return <LeafRow key={`${node.tag}-${index}`} {...rowProps} color={depth > 0 ? GROUP_COLORS[colorIndex % GROUP_COLORS.length] : undefined} />;
   });
 };
 
-const SingleView = ({ data, tags, enums, groups, groupIndentEnabled = true, highlightedTags, onTagClick }) => {
+const SingleView = ({ data, tags, enums, groups, groupIndentEnabled = true, highlightedTags, onTagClick, highlightedValueTags = [], onValueClick }) => {
   const displayData = useMemo(() => {
     if (!data || data.length === 0) return [];
-    if (groups && Object.keys(groups).length > 0) {
-      return groupify(data, groups);
-    }
-    return data;
+    return groups && Object.keys(groups).length > 0 ? groupify(data, groups) : data;
   }, [data, groups]);
 
   if (!data || data.length === 0) return <EmptyState />;
 
+  const messageType = data.find(field => field.tag === 35)?.value;
+  const messageName = enums?.[35]?.[messageType];
+  const title = messageName
+    ? messageName.replace(/([a-z\d])([A-Z])/g, '$1 $2').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, letter => letter.toUpperCase())
+    : messageType ? `Message ${messageType}` : 'FIX Message';
+
   return (
-    <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white">
-      <table className="min-w-full text-sm text-left">
-        <thead className="bg-slate-800 text-slate-100">
-          <tr>
-            <th className="px-4 py-3 font-semibold uppercase w-64">Tag</th>
-            <th className="px-6 py-3 font-semibold uppercase w-64">Field Name</th>
-            <th className="px-6 py-3 font-semibold uppercase">Value</th>
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          <NodeRenderer nodes={displayData} depth={0} tags={tags} enums={enums} groupIndentEnabled={groupIndentEnabled} highlightedTags={highlightedTags} onTagClick={onTagClick} />
-        </tbody>
-      </table>
+    <div className="fix-message-panel">
+      <h4 className="fix-message-title">{title}</h4>
+      <div className="fix-message-scroll" role="region" aria-label={`${title} fields`} tabIndex={0}>
+        <table className="fix-message-table" aria-label={`${title} FIX message`}>
+          <colgroup>
+            <col className="fix-tag-column" />
+            <col className="fix-name-column" />
+            <col />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col" className="fix-tag-cell">Tag</th>
+              <th scope="col">Field Name</th>
+              <th scope="col">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <NodeRenderer nodes={displayData} depth={0} tags={tags} enums={enums} groupIndentEnabled={groupIndentEnabled} highlightedTags={highlightedTags} onTagClick={onTagClick} highlightedValueTags={highlightedValueTags} onValueClick={onValueClick} />
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

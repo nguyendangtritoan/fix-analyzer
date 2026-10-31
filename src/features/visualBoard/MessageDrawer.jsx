@@ -14,6 +14,11 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('pretty');
   const [highlightedTags, setHighlightedTags] = useState([]);
+  const [highlightedValueTags, setHighlightedValueTags] = useState([]);
+
+  const toggleValueHighlight = tag => {
+    setHighlightedValueTags(current => current.includes(tag) ? current.filter(item => item !== tag) : [...current, tag]);
+  };
   const dictionaryContext = useFixDictionary();
   const dictionary = record?.dictionaryVersion
     ? dictionaryContext.getDictionary(record.dictionaryVersion)
@@ -103,6 +108,15 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
             </div>
           </div>
 
+          {tab === 'pretty' && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+              <p>Click a value to highlight its tag’s values. Click again to clear.</p>
+              {highlightedValueTags.length > 0 && (
+                <button type="button" onClick={() => setHighlightedValueTags([])} className="font-medium text-violet-700 underline underline-offset-2">Clear value highlights</button>
+              )}
+            </div>
+          )}
+
           {correlationIds.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <Link2 size={13} className="text-violet-500" />
@@ -123,6 +137,8 @@ const MessageDrawer = ({ record, getMessage, onClose, onNavigate, canGoPrevious,
               groupIndentEnabled
               highlightedTags={highlightedTags}
               onTagClick={toggleHighlight}
+              highlightedValueTags={highlightedValueTags}
+              onValueClick={toggleValueHighlight}
             />
           )}
           {!isLoading && tab === 'raw' && (

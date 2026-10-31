@@ -9,9 +9,11 @@ const MessagesView = ({
   groupIndentEnabled = true,
   highlightedTags,
   onTagClick,
+  highlightedValueTags,
+  onValueClick,
 }) => (
   <div className="overflow-x-auto pb-2">
-    <div className="flex gap-6">
+    <div className="flex items-start gap-4">
       {messages.map(message => (
         <section key={message.id} className="min-w-full flex-1 space-y-2 lg:min-w-[32rem]" aria-labelledby={`result-${message.id}`}>
           <div className="flex items-center justify-between gap-3">
@@ -30,6 +32,8 @@ const MessagesView = ({
             groupIndentEnabled={groupIndentEnabled}
             highlightedTags={highlightedTags}
             onTagClick={onTagClick}
+            highlightedValueTags={highlightedValueTags}
+            onValueClick={onValueClick}
           />
         </section>
       ))}
