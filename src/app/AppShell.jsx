@@ -20,7 +20,7 @@ const AppShell = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between xl:px-6">
           <div className="flex flex-wrap items-center gap-4">
             <a href="#/" className="flex items-center gap-2 text-slate-800" aria-label="FIX Analyzer home">

@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-10-31
+Last Updated: 2026-11-09
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with three browser-only workflows:
@@ -59,6 +59,7 @@ No backend exists. Confidential imported content must remain in the current brow
 - `#/visual-board`: Visual Board.
 - `#/text-diff`: Text diff, with its own input state and no dictionary controls or FIX parsing. All three workflows appear as peers in the primary navigation.
 - Navigation is hash based so static hosting needs no rewrite rules.
+- The shared sticky header uses an opaque white background without a backdrop filter. This avoids a filtered translucent layer beneath the Visual Board drawer; retain this when changing the app shell to reduce the risk of browser scroll/compositing flicker.
 - FIX 4.0–4.4, IMIX 2.0, and IMIXT 1.0 XML is converted to a virtual JavaScript module by Vite, eliminating runtime dictionary fetches. IMIXT 1.0 is composed with IMIX 2.0 so transport/admin and application message definitions are available together.
 - Auto-detection reads `BeginString(8)` from current input/results and maps supported versioned protocol families such as `FIX.4.4`, `IMIX.2.0`, and `IMIXT.1.0`. Manual selection and local custom XML upload remain available.
 - Custom dictionaries exist only in memory and are shared between both routes for the lifetime of the tab.
@@ -121,7 +122,7 @@ Collapsing retains two unchanged lines beside edits and replaces longer unchange
 - The result toolbar exposes Overview, Flow, and Field Counts. The separate Latency, Quotes & Prices, Orders, and Diagnostics tabs remain removed; per-message capture/round-trip/gap latency remains selectable inside Flow.
 - Overview keeps dataset, group, session, message-type, time-span, and Flow latency-count summaries without constructing removed table/diagnostic payloads in the worker.
 - The sequence board uses fixed-row windowing implemented in project code; no virtualization package was added. Scroll events update React only when the overscanned start/end row window changes, and rows use static absolute positions instead of transformed compositor layers.
-- Long pretty-message tables and the sequence board avoid hover-state repainting inside moving scroll surfaces. Their scroll regions use layout/paint containment, and message rows remain statically positioned so browser compositing work stays bounded.
+- Long pretty-message tables and the sequence board avoid hover-state repainting inside moving scroll surfaces. Shared tag-highlight colors also remain unchanged on hover in Pretty and Diff views. Their scroll regions use layout/paint containment, and message rows remain statically positioned so browser compositing work stays bounded.
 - The sequence board can project up to six FIX tags as separate compact columns. Repeated tags from repeating groups remain in message order within their column, and the board scrolls horizontally when the selected fields exceed the viewport.
 - Flow full-screen mode covers the app chrome and group explorer, keeps the active toolbar/filters and projected fields, lets the sequence board consume the remaining viewport, and preserves message-drawer behavior above the focused workspace.
 - The loaded desktop dashboard uses a viewport-bounded two-column grid beneath the sticky app header. The removed source-summary card no longer consumes vertical space; group cards and Flow content scroll independently while search, pagination, tabs, filters, and page position remain fixed.
@@ -175,6 +176,12 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+
+### 2026-11-09 - Reduce Header and Highlight Scroll Repainting
+- Files: `src/app/AppShell.jsx`, `src/utils/highlightUtils.js`, `PROJECT_KNOWLEDGE.md`
+- Summary: Replaced the sticky header's translucent, blurred background with solid white and removed hover color variants from all six tag-highlight colors.
+- Behavior Impact: Header layout and sticky behavior remain intact; selected rows keep their color as scrolling moves them beneath the pointer. The header change is a targeted mitigation for reported top-of-page flicker, not a confirmed diagnosis of the intermittent compositor artifact.
+- Verification: Live Chrome inspection found `backdrop-filter: blur(8px)` on the header. A 579-row synthetic message reproduced alternating highlighted-row backgrounds on four small scroll passes before the fix and constant backgrounds afterward. Twelve alternating long-message scrolls after the header change retained the same header bounds, zero page scroll, all 579 rows, and `backdrop-filter: none`. Dictionary menu placement and nested fullscreen/drawer scroll-lock restoration were checked. The exact reported top-area flash was not captured. All 96 tests, lint, production build, and local-only security verification passed; the build retains the existing embedded-dictionary chunk-size warning.
 
 ### 2026-10-31 - User-Controlled Value Highlights
 - Files: `src/components/ui/RowValue.jsx`, `src/components/ui/RowValue.css`, `src/components/features/SingleView.jsx`, `src/components/features/SingleView.css`, `src/components/features/MessagesView.jsx`, `src/components/features/DiffView.jsx`, `src/pages/MessageAnalyzerPage.jsx`, `src/features/visualBoard/MessageDrawer.jsx`, `docs/screenshots/compact-value-highlights.jpg`, `design-qa.md`, `PROJECT_KNOWLEDGE.md`.
