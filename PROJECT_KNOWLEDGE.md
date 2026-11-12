@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-11-09
+Last Updated: 2026-11-12
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with three browser-only workflows:
@@ -59,6 +59,8 @@ No backend exists. Confidential imported content must remain in the current brow
 - `#/visual-board`: Visual Board.
 - `#/text-diff`: Text diff, with its own input state and no dictionary controls or FIX parsing. All three workflows appear as peers in the primary navigation.
 - Navigation is hash based so static hosting needs no rewrite rules.
+- Message Analyzer and Text diff each live inside a stable React `Activity` boundary in `AppShell`. Switching routes hides the inactive workspace while preserving its inputs, custom text names, extra slots, result state, highlights, comparison pair, wrapping, and line-fold expansions in memory. Hidden-workspace effects are cleaned up and restart on return, so inactive Message Analyzer auto-detection cannot change the active Visual Board dictionary. Clear resets only the current workspace; reload or closing the browser tab discards all three workspaces.
+- Visual Board stays mounted with an `isActive` route flag. Its `Activity` boundary wraps only the rendered view, keeping the worker/controller outside it so imported source data, in-progress analysis, and pending requests survive navigation. Pasted import drafts, selected groups, searches, pagination, analysis mode, Flow filters/projections, Field Counts investigations, and the message drawer retain their state. Hidden drawer effects are paused; the fullscreen scroll lock and dictionary auto-detection are gated by `isActive`. Returning restores the board's dictionary without resetting its analysis. Do not wrap the entire board controller in `Activity`: hiding it would run the worker's teardown and leave retained result rows without their source data.
 - The shared sticky header uses an opaque white background without a backdrop filter. This avoids a filtered translucent layer beneath the Visual Board drawer; retain this when changing the app shell to reduce the risk of browser scroll/compositing flicker.
 - FIX 4.0–4.4, IMIX 2.0, and IMIXT 1.0 XML is converted to a virtual JavaScript module by Vite, eliminating runtime dictionary fetches. IMIXT 1.0 is composed with IMIX 2.0 so transport/admin and application message definitions are available together.
 - Auto-detection reads `BeginString(8)` from current input/results and maps supported versioned protocol families such as `FIX.4.4`, `IMIX.2.0`, and `IMIXT.1.0`. Manual selection and local custom XML upload remain available.
@@ -99,7 +101,7 @@ Collapsing retains two unchanged lines beside edits and replaces longer unchange
 5. Selecting a message asks the worker for the original line and duplicate-preserving pairs on demand.
 6. The initial parse collects the complete set of numeric tags encountered without retaining another message copy. Field projection, count investigation, or value hints ask the worker for arbitrary numeric tags. Each newly requested tag is scanned from retained local source once and indexed by message. Flow projection returns ordered values only when requested; Field Counts stay in the worker and return compact totals. Value hints count each distinct value at most once per message and return the complete distinct set for the current scope.
 7. Copy asks the worker to format either the complete pasted source or the selected detected group's message offsets. File sources require a selected group and cannot be copied wholesale. Every generated format can be pasted back: raw, pipe, and SOH parse directly; pretty/bracketed and JSON are reconstructed locally with field order and duplicates preserved.
-8. Clear, cancel, route teardown, reload, or tab close terminates the worker and releases its dataset.
+8. Switching app routes keeps the worker and dataset in memory. Clear/cancel replaces the worker and releases its dataset; actual workspace unmount, reload, or browser-tab close terminates it. Hook teardown terminates the current worker, including a replacement created by import or Clear, rather than only the worker from initial mount.
 
 ## Visual Board Parsing and Correlation
 - Prefix parsing extracts timestamp, incoming/outgoing direction, and common `sender->target:qualifier` session labels. Message admission recognizes versioned FIX-family BeginString values rather than requiring the literal `8=FIX.` prefix.
@@ -161,6 +163,8 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser QA covers Message Analyzer side-by-side viewing with explicit comparison on/off, dictionary tag-name hints, dataset value/count hints, independent Field Counts comparison tabs with persistent count badges, count-only isolation from Flow, and reordered/nested repeating-group comparison with a clean browser console.
 - Text-diff browser QA covers the dedicated navigation tab and direct hash route, independent inputs, empty/one-sided/identical text, example/clear and extra-input controls, pair selection, and navigation back to Message Analyzer/Visual Board. Comparison QA covers inserted/removed lines, inline changes, wrapping, and the simplified toolbar without difference counts or navigation controls.
 - Folding QA covers leading/middle unchanged line sections with context, paired expansion/collapse, edit-triggered expansion reset, and restoring the full view. Long changed log lines stay complete without character-level buttons.
+- Workspace-retention browser QA covers both navigation directions, whitespace-only input, extra inputs, custom names, pair selection, wrapping/folding and individual expansions, analyzer comparison/indent/value highlights, visits through Visual Board, browser Back/Forward, Clear/Example isolation, and reload reset. Inactive analyzer dictionary effects stay paused while Visual Board uses a different FIX version.
+- Visual Board retention QA covers import drafts, loaded pasted logs, selected groups, search/page size, Flow mode/filters/projections, multiple Field Counts investigations, raw message lookups and new queries after returning, dictionary restoration, nested fullscreen/drawer scroll locks, Clear/re-import isolation, and reload reset. File-picker automation was blocked by Chrome extension permissions; file-input preparation remains covered by the existing Node tests.
 - The embedded FIX XML makes the main bundle exceed Vite's default 500 kB warning threshold; this is an intentional no-runtime-fetch tradeoff.
 
 ## Known Risks and Gotchas
@@ -176,6 +180,12 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+
+### 2026-11-12 - Preserve All App Workspaces
+- Files: `src/app/AppShell.jsx`, `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/useVisualBoardWorker.js`, `README.md`, `PROJECT_KNOWLEDGE.md`
+- Summary: Preserved Message Analyzer and Text diff with independent React `Activity` boundaries. Kept the Visual Board controller and current worker alive across routes with an inner boundary around its view. Restricted board dictionary detection and fullscreen scroll locking to the active route, and corrected genuine unmount cleanup to terminate the current worker after resets.
+- Behavior Impact: All three workspaces retain their independent pasted inputs, loaded data, and view state across app-tab switches. This includes text names, added inputs, highlights, comparison settings, board filters, selected groups, field investigations, and message details. Clear affects only the active workspace; reload discards all three. Hidden views release their keyboard/scroll effects and do not override the active dictionary. Imported data stays in memory only.
+- Verification: All 96 existing tests, `npm run lint`, `npm run build`, `npm run verify:security`, and `git diff --check` passed. Browser assertions reproduced resets before the change and verified exact retention of analyzer/text inputs and comparison controls, board drafts and loaded datasets, group/search/page-size settings, Flow filters/projections, multiple field investigations, selected Raw message view, fresh worker lookups/counts after returning, browser Back/Forward, active dictionary isolation, nested fullscreen/drawer scroll-lock restoration, Clear/Example/re-import isolation, and reload reset. No browser warnings/errors were reported. Chrome extension permissions blocked automated file selection, so the loaded-dataset browser checks used pasted logs; existing file-import Node tests pass. Screenshots capture retained workspaces after navigation.
 
 ### 2026-11-09 - Reduce Header and Highlight Scroll Repainting
 - Files: `src/app/AppShell.jsx`, `src/utils/highlightUtils.js`, `PROJECT_KNOWLEDGE.md`

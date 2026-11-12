@@ -2,6 +2,8 @@
 
 FIX Analyzer is a privacy-first React application for inspecting individual FIX messages, comparing messages, and exploring complete FIX log lifecycles. Everything runs inside the browser tab; the application has no backend and does not transmit imported messages.
 
+Message Analyzer, Text diff, and Visual Board keep their independent inputs, loaded data, and view settings when switching tabs. This workspace state stays in memory until cleared or the browser page is reloaded or closed.
+
 ## Features
 
 ### Message Analyzer
@@ -33,6 +35,7 @@ Open `#/visual-board` or use the top navigation. The board accepts pasted text a
 - Shows virtualized chronological flows with distinct `→` outgoing and `←` incoming paths, message type, common IDs, capture lag, and matched `D → 8` round-trip latency.
 - Expands the Flow workspace into a focused full-screen view while preserving filters, field projections, and message details.
 - Keeps the loaded desktop workspace focused on Overview, Flow, and Field Counts, with detected groups and active content scrolling inside the viewport.
+- Retains pasted drafts, imported logs, selected groups, filters, field investigations, and message details when switching to another app tab and back.
 - Opens any row as a dictionary-enriched message drawer while preserving duplicate fields and the original log line.
 - Projects up to six numeric FIX tags onto separate sequence-board columns while preserving every repeated occurrence.
 - Investigates any numeric FIX tag in a dedicated Field Counts tab. Tag hints include every tag currently present in the loaded messages (including custom tags) with dictionary names when available; value hints include every distinct value in the current scope with per-value message counts. Windowed hint menus keep large lists scrollable. Multiple independent comparison tabs keep results such as `35=R` and `35=AG` visible together. Conditions inside one comparison support cumulative AND counts, repeated values, case-insensitive fragments, and `*` wildcards such as `55=USD/*` without changing Flow.

@@ -73,9 +73,9 @@ export const useVisualBoardWorker = ({ onResult } = {}) => {
   }, []);
 
   useEffect(() => {
-    const worker = startWorker();
+    startWorker();
     return () => {
-      worker.terminate();
+      workerRef.current?.terminate();
       workerRef.current = null;
       rejectPendingRequests();
     };

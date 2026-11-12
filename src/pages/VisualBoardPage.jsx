@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Activity, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   ListTree,
@@ -47,7 +47,7 @@ const createFieldInvestigation = number => ({
   loading: false,
 });
 
-const VisualBoardPage = () => {
+const VisualBoardPage = ({ isActive = true }) => {
   const { autoDetectBeginString, tags, enums } = useFixDictionary();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedGroupId, setSelectedGroupId] = useState('all');
@@ -64,7 +64,7 @@ const VisualBoardPage = () => {
   const fieldInvestigationSequenceRef = useRef(1);
 
   useEffect(() => {
-    if (!isFlowFullscreen) return undefined;
+    if (!isActive || !isFlowFullscreen) return undefined;
 
     const releaseScrollLock = lockDocumentScroll();
     const handleKeyDown = event => {
@@ -77,11 +77,9 @@ const VisualBoardPage = () => {
       document.removeEventListener('keydown', handleKeyDown);
       releaseScrollLock();
     };
-  }, [isFlowFullscreen]);
+  }, [isActive, isFlowFullscreen]);
 
-  const handleResult = useCallback(result => {
-    const versions = Object.keys(result.summary.versionCounts).filter(version => version !== 'Unknown');
-    if (versions.length === 1) autoDetectBeginString(versions[0]);
+  const handleResult = useCallback(() => {
     setActiveTab('overview');
     setSelectedGroupId('all');
     setSelectedRecordId(null);
@@ -95,7 +93,7 @@ const VisualBoardPage = () => {
     fieldCountRequestRef.current.clear();
     setFieldLoading(false);
     setIsFlowFullscreen(false);
-  }, [autoDetectBeginString]);
+  }, []);
 
   const worker = useVisualBoardWorker({ onResult: handleResult });
   const result = worker.result;
@@ -103,6 +101,12 @@ const VisualBoardPage = () => {
   const queryFields = worker.queryFields;
   const countFields = worker.countFields;
   const getFieldHints = worker.getFieldHints;
+
+  useEffect(() => {
+    if (!isActive || !result) return;
+    const versions = Object.keys(result.summary.versionCounts).filter(version => version !== 'Unknown');
+    if (versions.length === 1) autoDetectBeginString(versions[0]);
+  }, [autoDetectBeginString, isActive, result]);
 
   const recordsById = useMemo(() => new Map((result?.records || []).map(record => [record.id, record])), [result]);
   const selectedRecord = selectedRecordId ? recordsById.get(selectedRecordId) : null;
@@ -271,7 +275,7 @@ const VisualBoardPage = () => {
 
   const selectedVisibleIndex = selectedRecordId ? filteredRecords.findIndex(record => record.id === selectedRecordId) : -1;
 
-  return (
+  const content = (
     <div className="p-4 pb-20 sm:p-6">
       {!result ? (
         <ImportPanel
@@ -379,6 +383,9 @@ const VisualBoardPage = () => {
       )}
     </div>
   );
+
+  // Keep the worker outside Activity so hiding the view retains its source data.
+  return <Activity mode={isActive ? 'visible' : 'hidden'}>{content}</Activity>;
 };
 
 export default VisualBoardPage;

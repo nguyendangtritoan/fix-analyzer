@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Activity } from 'react';
 import { ArrowRightLeft, FileDiff, LayoutDashboard, LockKeyhole, Network } from 'lucide-react';
 import DictionaryControls from '../components/features/DictionaryControls';
 import { useFixDictionary } from '../context/useFixDictionary';
@@ -73,7 +73,13 @@ const AppShell = () => {
       </header>
 
       <main className="mx-auto max-w-[1600px]">
-        {activeRoute === '/visual-board' ? <VisualBoardPage /> : activeRoute === '/text-diff' ? <TextDiffPage /> : <MessageAnalyzerPage />}
+        <Activity mode={activeRoute === '/' ? 'visible' : 'hidden'}>
+          <MessageAnalyzerPage />
+        </Activity>
+        <Activity mode={activeRoute === '/text-diff' ? 'visible' : 'hidden'}>
+          <TextDiffPage />
+        </Activity>
+        <VisualBoardPage isActive={activeRoute === '/visual-board'} />
       </main>
     </div>
   );
