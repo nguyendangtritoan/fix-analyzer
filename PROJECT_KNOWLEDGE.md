@@ -8,7 +8,7 @@ When any code is added, removed, or modified:
 2. Add or update relevant sections below (architecture, behavior, risks, workflows).
 3. Append one entry to `Change Log` with files touched and verification performed.
 
-Last Updated: 2026-11-12
+Last Updated: 2026-11-13
 
 ## Project Purpose
 `fix-analyzer` is a privacy-first, static React application with three browser-only workflows:
@@ -47,7 +47,8 @@ No backend exists. Confidential imported content must remain in the current brow
 - `src/features/visualBoard/*.jsx`: importer, group explorer, virtual sequence board, message drawer, and analysis panels.
 - `src/utils/parsers.js`: individual-message parsing and QuickFIX XML dictionary parsing/grouping.
 - `src/utils/fixDelimiter.js`: shared automatic FIX field-delimiter detection and lossless tokenization for both routes.
-- `src/components/features/SingleView.jsx`: dictionary-enriched grouped message rendering, reused by the drawer.
+- `src/components/features/SingleView.jsx` and `FixMessagePanel.jsx`: dictionary-enriched grouped message rendering, reused by the drawer and image capture.
+- `src/components/features/MessageCapture.jsx`, `src/utils/messageCapture.js`, and `src/utils/messageImage.js`: occurrence-based range selection, preview, and browser-local PNG/clipboard export.
 - `src/components/features/TextDiffView.jsx` and `src/utils/textDiff.js`: browser-local original-text comparison with aligned lines and character highlights.
 - `src/utils/textDiffFolding.js`: whole unchanged-line sections with surrounding context.
 - `src/constants/dictionarySources.js`: metadata for bundled FIX 4.0–4.4, IMIX 2.0, and IMIXT 1.0 dictionaries.
@@ -82,7 +83,11 @@ Independent messages and the Visual Board Pretty drawer share the compact navy `
 
 Currency(15) values and slash-separated currency pairs in Symbol(55), such as `USD/NOK`, use pink text in the compact message view. Other symbols retain their regular styling. Manual row highlights use a darker rose foreground for these values to preserve contrast against the pale selected background.
 
-Clicking a rendered value toggles a separate purple text highlight for every occurrence of that numeric tag, including repeating-group entries and other displayed messages. Tag/name clicks retain whole-row highlighting. Value highlights are shared across independent and comparison views; the drawer maintains its own set across record navigation and Pretty/Raw switches. Native value buttons support Enter/Space, pressed-state semantics, and tooltips. Value clicks do not bubble to the row; dragging to select text does not toggle highlights. Highlighted currencies temporarily use purple and restore their pink accent when cleared. Light table/selected-row backgrounds use darker purple for contrast, while compact navy panels use pale purple. `Clear value highlights` leaves row highlights and inputs intact; the main Clear action resets both kinds of highlight. State is held only in memory and never changes source data or copy/export output.
+Clicking a rendered value toggles a separate purple text highlight for every occurrence of that numeric tag, including repeating-group entries and other displayed messages. Tag/name clicks retain whole-row highlighting. Value highlights are shared across independent and comparison views; the drawer maintains its own set across record navigation and Pretty/Raw switches. Native value buttons support Enter/Space, pressed-state semantics, and tooltips. Value clicks do not bubble to the row; dragging to select text does not toggle highlights. Highlighted currencies temporarily use purple and restore their pink accent when cleared. Light table/selected-row backgrounds use darker purple for contrast, while compact navy panels use pale purple. `Clear value highlights` leaves row highlights and inputs intact; the main Clear action resets both kinds of highlight. State is held only in memory and never changes source data or text copy/export output.
+
+Every compact message panel has a `Capture image` action, including Visual Board Pretty messages. Its modal uses a snapshot of the message, dictionary, indentation, and highlights at opening. Users click first/last rows or select numbered From/Through options, then preview the inclusive range; `Whole message` selects every field. Repeated numeric tags are distinguished by their ordered row occurrence, including nested groups. Capture expands groups in its own view without changing the source panel's collapse state or highlights. Reverse selections normalize to source order, and selecting the same row twice captures one field. The preview keeps the title and column headers and only the selected rows; selection outlines and application controls are excluded. A selected child retains its original group indentation/color even if its parent is outside the range.
+
+PNG export uses the shared message renderer at 960 CSS pixels, inline computed styles, a locally serialized SVG, and canvas, with no new dependency or network access. It normally renders at 2× resolution and reduces resolution for long images within conservative canvas limits; excessive dimensions show an error requesting a smaller range rather than cropping. The generated PNG is previewed before Copy image or Download PNG is enabled. Clipboard writing runs directly from a user click with the prepared PNG; unavailable/denied clipboard access offers download instead. These explicit exports are the only new destinations for message data; images, selections, and snapshots otherwise remain in memory. Native modal focus containment, Escape, restored opener focus, and the shared nested scroll lock protect interaction with the underlying drawer.
 
 ## Text Diff Behavior
 The comparison card omits an explanatory banner. Its pair-selector row appears only when more than two text inputs exist, avoiding an empty header for the default two-input view.
@@ -180,6 +185,12 @@ The standard pre-handoff suite is `npm test`, `npm run lint`, `npm run build`, `
 - Browser compositor flicker has no meaningful Node-only regression seam; retain the long repeating-group browser stress check when changing drawer/table/scroll CSS.
 
 ## Change Log
+
+### 2026-11-13 - Capture Selected Message Rows as an Image
+- Files: `src/components/features/SingleView.jsx`, `src/components/features/SingleView.css`, `src/components/features/FixMessagePanel.jsx`, `src/components/features/MessageCapture.jsx`, `src/components/features/MessageCapture.css`, `src/utils/messageCapture.js`, `src/utils/messageCapture.test.js`, `src/utils/messageImage.js`, `PROJECT_KNOWLEDGE.md`.
+- Summary: Added a per-message capture modal with exact occurrence-based range selection, a rendered PNG preview, clipboard image copying, and PNG download. Extracted the existing compact renderer so exported fields keep the same colors, values, and group context.
+- Behavior Impact: Users can share a whole message or a contiguous subset, even below the viewport or inside collapsed groups, without changing the displayed message. Image generation remains entirely local and uses existing browser capabilities.
+- Verification: All 101 Node tests, lint, production build, local-only security verification, and diff whitespace checks passed. Browser QA verified nested/repeated occurrence selection, single-row keyboard selection, independent collapse/highlight state, a complete 198-row image (1920 × 8742), rows below the viewport, Unicode/markup text, clipboard PNG, download, narrow-screen controls, and drawer Escape/focus/scroll-lock behavior. Production preview retained the existing strict CSP, copied a PNG successfully, and reported no console warnings/errors. Screenshots: `docs/screenshots/message-capture-range.png`, `docs/screenshots/message-capture-preview.png`.
 
 ### 2026-11-12 - Preserve All App Workspaces
 - Files: `src/app/AppShell.jsx`, `src/pages/VisualBoardPage.jsx`, `src/features/visualBoard/useVisualBoardWorker.js`, `README.md`, `PROJECT_KNOWLEDGE.md`

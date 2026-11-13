@@ -1,0 +1,44 @@
+.fix-capture-dialog {
+  width: min(1080px, calc(100vw - 24px));
+  height: min(900px, calc(100dvh - 32px));
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  box-shadow: 0 24px 80px #0f172a40;
+}
+.fix-capture-dialog[open] { display: flex; flex-direction: column; }
+.fix-capture-header, .fix-capture-toolbar, .fix-capture-notice, .fix-capture-error { flex-shrink: 0; }
+.fix-capture-dialog::backdrop { background: #0f172a80; }
+.fix-capture-header { display: flex; justify-content: space-between; gap: 16px; padding: 20px 24px 16px; background: white; }
+.fix-capture-header h2 { font-size: 20px; line-height: 28px; font-weight: 700; color: #0f172a; }
+.fix-capture-header p { margin-top: 4px; font-size: 13px; }
+.fix-capture-close { align-self: flex-start; padding: 5px; border-radius: 6px; }
+.fix-capture-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 24px; border-block: 1px solid #e2e8f0; background: white; }
+.fix-capture-toolbar label { flex: 1; min-width: 160px; max-width: 100%; font-size: 12px; font-weight: 600; }
+.fix-capture-toolbar select { display: block; width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; font-weight: 400; background: white; text-overflow: ellipsis; }
+.fix-capture-toolbar button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.fix-capture-toolbar .fix-capture-primary { background: #0369a1; border-color: #0369a1; color: white; }
+.fix-capture-toolbar button:disabled { opacity: .45; cursor: not-allowed; }
+.fix-capture-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.fix-capture-summary { align-self: center; font-size: 13px; }
+.fix-capture-notice, .fix-capture-error { padding: 10px 24px; font-size: 12px; }
+.fix-capture-error { color: #9f1239; background: #fff1f2; }
+.fix-capture-content { flex: 1; min-height: 0; padding: 16px 24px 24px; overflow: auto; overscroll-behavior: contain; }
+.fix-capture-preview { background: #e2e8f0; }
+.fix-capture-preview img { display: block; width: 100%; max-width: 960px; height: auto; margin: 0 auto; }
+.fix-capture-render { position: fixed; left: -10000px; top: 0; width: 960px; pointer-events: none; }
+.fix-capture-dialog button:focus-visible, .fix-capture-dialog select:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
+.fix-capture-row { cursor: crosshair; }
+.fix-message-table .fix-capture-selected { outline: 1px solid #67d4ff; outline-offset: -1px; }
+@media (max-width: 600px) {
+  .fix-capture-header, .fix-capture-toolbar { padding: 12px; }
+  .fix-capture-notice, .fix-capture-error { padding: 8px 12px; }
+  .fix-capture-content { padding: 12px; }
+  .fix-capture-toolbar label { min-width: 100%; }
+}
