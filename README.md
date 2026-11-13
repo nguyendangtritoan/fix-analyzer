@@ -10,7 +10,7 @@ Message Analyzer, Text diff, and Visual Board keep their independent inputs, loa
 
 - Auto-detects consistent FIX field delimiters, including SOH, `^A`, pipe, punctuation, control characters, Unicode, and multi-character markers; bracketed, columnar, and best-effort space-separated text remain supported.
 - Shows all populated messages in separate dictionary-enriched, grouped views side by side.
-- Enables aligned field and repeating-group comparison for two or more messages only when the comparison button is turned on. Columnar enum displays such as `EXECUTIONREPORT ['8']` normalize to their raw FIX codes, and reordered group instances align by delimiter identity with explicit instance rows for duplicate occurrences.
+- Enables aligned field and repeating-group comparison for two or more messages only when the comparison button is turned on. Every message stays side by side in a compact Text diff-style pane, with the first message marked as the reference. Changed characters are yellow, added fields green, removed fields rose; blank cells preserve alignment. **Collapse unchanged** hides rows identical across all messages, and **Wrap lines** controls long values. Columnar enum displays such as `EXECUTIONREPORT ['8']` normalize to their raw FIX codes, and reordered group instances align by delimiter identity with explicit instance rows for duplicate occurrences.
 - Uses bundled FIX 4.0–4.4, IMIX 2.0, and combined IMIXT 1.0/IMIX 2.0 QuickFIX dictionaries, or a locally selected custom XML dictionary.
 - Copies a message as pipe, SOH, bracketed, columnar, or JSON text.
 

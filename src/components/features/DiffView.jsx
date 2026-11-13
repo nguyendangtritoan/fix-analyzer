@@ -1,120 +1,100 @@
-import React, { useMemo } from 'react';
-import TagBadge from '../ui/TagBadge';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Minimize2, WrapText } from 'lucide-react';
 import RowValue from '../ui/RowValue';
 import { getTagName } from '../../utils/fixUtils';
-import { groupify, flattenForDiff } from '../../utils/parsers';
+import { compareFixMessages } from '../../utils/fixDiff';
+import { buildTextDiffSections } from '../../utils/textDiffFolding';
 import { getTagHighlightClass } from '../../utils/highlightUtils';
+import './DiffView.css';
 
 const DiffView = ({ messages = [], tags, enums, groups, groupIndentEnabled = true, highlightedTags, onTagClick, highlightedValueTags = [], onValueClick }) => {
-  const groupedMessages = useMemo(() => (
-    messages.map(message => ({
-      ...message,
-      tree: groupify(message.data, groups),
-    }))
-  ), [messages, groups]);
+  const rows = useMemo(() => compareFixMessages(messages, groups), [messages, groups]);
+  const [wrapLines, setWrapLines] = useState(true);
+  const [collapseUnchanged, setCollapseUnchanged] = useState(false);
+  const [expansions, setExpansions] = useState(null);
+  const sections = useMemo(() => collapseUnchanged ? buildTextDiffSections(rows) : [], [rows, collapseUnchanged]);
 
-  const flatMessages = useMemo(() => (
-    groupedMessages.map(message => ({
-      ...message,
-      flat: flattenForDiff(message.tree),
-    }))
-  ), [groupedMessages]);
-
-  const mappedMessages = useMemo(() => (
-    flatMessages.map(message => ({
-      ...message,
-      map: new Map(message.flat.map(item => [item.key, item])),
-    }))
-  ), [flatMessages]);
-
-  const unifiedList = useMemo(() => {
-    const list = [];
-    const seenKeys = new Set();
-
-    flatMessages.forEach(message => {
-      message.flat.forEach(item => {
-        if (!seenKeys.has(item.key)) {
-          seenKeys.add(item.key);
-          list.push(item.key);
-        }
-      });
+  const toggleExpansion = key => {
+    setExpansions(current => {
+      const keys = new Set(current?.rows === rows ? current.keys : []);
+      if (keys.has(key)) keys.delete(key);
+      else keys.add(key);
+      return { rows, keys };
     });
+  };
 
-    return list;
-  }, [flatMessages]);
+  const renderCell = (cell, message, index) => {
+    const { item, type, segments } = cell;
+    const marker = type === 'added' ? '+' : type === 'removed' ? '−' : type === 'changed' ? '•' : '';
+    const highlightClass = item ? getTagHighlightClass(item.tag, highlightedTags) : '';
+    return (
+      <td key={message.id} data-diff-type={type} className={`fix-diff-cell ${index ? 'fix-diff-divider' : ''} ${highlightClass || `fix-diff-${type}`}`}>
+        {!item ? <span className="sr-only">Not present in {message.label}</span> : (
+          <div className={`fix-diff-field ${item.isHeader || item.isInstanceHeader ? 'fix-diff-group' : ''}`} onClick={() => onTagClick?.(item.tag)}>
+            <div className="fix-diff-gutter">
+              {onTagClick ? <button type="button" className="fix-diff-tag" aria-label={`Highlight tag ${item.tag} in ${message.label}`} aria-pressed={highlightedTags?.some(entry => entry.tag === item.tag) || false} onClick={event => { event.stopPropagation(); onTagClick(item.tag); }}>{item.tag}</button> : item.tag}
+              <span aria-hidden="true" className="fix-diff-marker">{marker}</span>
+            </div>
+            <div className="fix-diff-line" style={{ paddingLeft: 12 + (groupIndentEnabled ? item.depth * 12 : 0) }}>
+              <span className="sr-only">{type === 'equal' ? '' : `${type} field: `}</span>
+              <span className="fix-diff-name">{getTagName(item.tag, tags)}{item.isHeader ? ' (Group)' : item.isInstanceHeader ? ' (Instance)' : ''}</span>
+              <span className="fix-diff-separator"> = </span>
+              <RowValue
+                tag={item.tag}
+                value={item.value}
+                enums={item.isInstanceHeader ? {} : enums}
+                highlighted={highlightedValueTags.includes(item.tag)}
+                onValueClick={onValueClick}
+                valueContent={segments.map((segment, segmentIndex) => <span key={segmentIndex} className={segment.changed ? `fix-diff-edit fix-diff-edit-${type}` : undefined}>{segment.text.replaceAll('\u0001', '␁')}</span>)}
+              />
+            </div>
+          </div>
+        )}
+      </td>
+    );
+  };
+
+  const renderRow = row => <tr key={row.key}>{row.cells.map((cell, index) => renderCell(cell, messages[index], index))}</tr>;
+  const renderSection = section => {
+    if (section.type === 'row') return renderRow(section.row);
+    const expanded = expansions?.rows === rows && expansions.keys.has(section.id);
+    return <React.Fragment key={section.id}>
+      <tr><td colSpan={messages.length} className="fix-diff-fold">
+        <button type="button" aria-expanded={Boolean(expanded)} onClick={() => toggleExpansion(section.id)}>
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          {expanded ? 'Collapse' : 'Show'} {section.rows.length} unchanged rows
+        </button>
+      </td></tr>
+      {expanded && section.rows.map(renderRow)}
+    </React.Fragment>;
+  };
 
   return (
-    <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white">
-      <table className="min-w-full text-sm">
-        <thead className="bg-slate-800 text-slate-100">
-          <tr>
-            <th className="px-4 py-3 text-left w-20">Tag</th>
-            <th className="px-4 py-3 text-left w-48">Field</th>
-            {mappedMessages.map((message, index) => (
-              <th
-                key={message.id}
-                className={`px-4 py-3 text-left min-w-[220px] ${index < mappedMessages.length - 1 ? 'border-r border-slate-600' : ''}`}
-              >
-                {message.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {unifiedList.map((key, idx) => {
-             // Fallback for duplicates in unifiedList (shouldn't happen with new logic, but safe for React keys)
-             const uniqueKey = `${key}_${idx}`;
-             const rowItems = mappedMessages.map(message => message.map.get(key));
-             const firstItem = rowItems.find(Boolean);
-             const tag = firstItem?.tag;
-             const depth = rowItems.find(item => item?.depth !== undefined)?.depth || 0;
-             const isHeader = rowItems.some(item => item?.isHeader);
-             const isInstanceHeader = rowItems.some(item => item?.isInstanceHeader);
-
-             const values = rowItems.map(item => item?.value);
-             const presentValues = values.filter(value => value !== undefined);
-             const isDiff = new Set(presentValues).size > 1;
-             const isMissing = values.some(value => value === undefined);
-
-             let rowClass = "hover:bg-slate-50";
-             if (isDiff) rowClass = "bg-yellow-50 hover:bg-yellow-100";
-             if (isMissing) rowClass = "bg-red-50 hover:bg-red-100";
-             if (isHeader) rowClass = "bg-slate-100 font-bold text-slate-700";
-             if (isInstanceHeader) rowClass = "bg-blue-50/70 font-semibold text-slate-700";
-             const highlightClass = getTagHighlightClass(tag, highlightedTags);
-             if (highlightClass) {
-                rowClass = isHeader || isInstanceHeader ? `${highlightClass} font-bold text-slate-700` : highlightClass;
-             }
-
-             const padding = groupIndentEnabled ? { paddingLeft: `${depth * 20 + 16}px` } : undefined;
-
-             return (
-               <tr key={uniqueKey} className={`${rowClass} cursor-pointer transition-colors`} onClick={() => onTagClick?.(tag)}>
-                 <td className="px-4 py-2 align-top" style={padding}>
-                    <TagBadge tag={tag} />
-                 </td>
-                 <td className="px-4 py-2 align-top text-blue-600 font-medium">
-                    {getTagName(tag, tags)} {isHeader ? "(Group)" : isInstanceHeader ? "(Instance)" : ''}
-                 </td>
-                 {mappedMessages.map((message, messageIndex) => {
-                   const value = rowItems[messageIndex]?.value;
-                   const isLastMessage = messageIndex === mappedMessages.length - 1;
-
-                   return (
-                     <td
-                       key={message.id}
-                       className={`px-4 py-2 font-mono align-top ${isLastMessage ? '' : 'border-r border-gray-200'} ${value === undefined ? 'italic text-gray-400' : ''}`}
-                     >
-                       {value !== undefined ? <RowValue tag={tag} value={value} enums={enums} highlighted={highlightedValueTags.includes(tag)} onValueClick={onValueClick} /> : 'MISSING'}
-                     </td>
-                   );
-                 })}
-               </tr>
-             );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <section className="fix-diff" aria-label="FIX message comparison">
+      <div className="fix-diff-toolbar">
+        <span>Comparing with <strong>{messages[0]?.label}</strong></span>
+        <div className="fix-diff-controls">
+          <button type="button" aria-pressed={collapseUnchanged} onClick={() => { setCollapseUnchanged(value => !value); setExpansions(null); }}><Minimize2 size={14} />Collapse unchanged</button>
+          <button type="button" aria-pressed={wrapLines} onClick={() => setWrapLines(value => !value)}><WrapText size={14} />Wrap lines</button>
+        </div>
+      </div>
+      <div className="fix-diff-scroll" tabIndex={0} role="region" aria-label="Side-by-side FIX comparison">
+        <table className={wrapLines ? 'fix-diff-table fix-diff-wrap' : 'fix-diff-table'} style={{ minWidth: messages.length * 340 }}>
+          <thead><tr>{messages.map((message, index) => <th key={message.id} scope="col" style={{ width: `${100 / messages.length}%` }}>
+            {message.label}{index === 0 && <span className="fix-diff-reference">Reference</span>}
+          </th>)}</tr></thead>
+          <tbody>{collapseUnchanged ? sections.map(renderSection) : rows.map(renderRow)}</tbody>
+        </table>
+        {rows.length === 0 && <p className="p-6 text-sm text-slate-500">No FIX fields found in these messages.</p>}
+      </div>
+      <div className="fix-diff-legend">
+        <span><span className="fix-diff-edit fix-diff-edit-changed">•</span> Changed value</span>
+        <span><span className="fix-diff-edit fix-diff-edit-removed">−</span> Removed field</span>
+        <span><span className="fix-diff-edit fix-diff-edit-added">+</span> Added field</span>
+        <span>Fields aligned by tag and repeating group</span>
+      </div>
+    </section>
   );
 };
+
 export default DiffView;

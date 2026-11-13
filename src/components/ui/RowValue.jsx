@@ -2,13 +2,14 @@ import React from 'react';
 import { getHumanValue } from '../../utils/fixUtils';
 import './RowValue.css';
 
-const RowValue = ({ tag, value, enums, compact = false, highlighted = false, onValueClick }) => {
+const RowValue = ({ tag, value, enums, compact = false, highlighted = false, onValueClick, valueContent }) => {
   const { val, desc } = getHumanValue(tag, value, enums);
+  const displayValue = valueContent ?? val;
   const isCurrency = compact && (tag === 15 || (tag === 55 && /^[A-Z]{3}\/[A-Z]{3}$/.test(value)));
   const content = compact
-    ? (desc ? <>{desc.replaceAll('_', ' ')} <span className="fix-raw-value">({val})</span></> : val)
+    ? (desc ? <>{desc.replaceAll('_', ' ')} <span className="fix-raw-value">({displayValue})</span></> : displayValue)
     : <>
-      {val} {desc && <span className="text-gray-400 text-xs ml-1">({desc})</span>}
+      {displayValue} {desc && <span className="text-gray-400 text-xs ml-1">({desc})</span>}
     </>;
   const colorClass = highlighted ? 'fix-value-highlight' : isCurrency ? 'fix-currency-value' : '';
 

@@ -1,0 +1,38 @@
+.fix-diff { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 8px; background: white; box-shadow: 0 1px 2px #0000000d; }
+.fix-diff-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; font-size: 12px; color: #64748b; }
+.fix-diff-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.fix-diff-controls button { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; color: #475569; font-weight: 500; }
+.fix-diff-controls button[aria-pressed="true"] { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.fix-diff-scroll { position: relative; max-height: 65vh; overflow: auto; overscroll-behavior: contain; }
+.fix-diff-table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 20px; }
+.fix-diff-wrap { table-layout: fixed; }
+.fix-diff-table thead { position: sticky; top: 0; z-index: 10; background: #1e293b; color: #f1f5f9; }
+.fix-diff-table th { padding: 8px 16px; text-align: left; font-weight: 500; border-right: 1px solid #475569; overflow-wrap: anywhere; }
+.fix-diff-table th:last-child { border-right: 0; }
+.fix-diff-reference { margin-left: 8px; border-radius: 3px; background: #475569; padding: 2px 5px; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 10px; }
+.fix-diff-cell { padding: 0; vertical-align: top; color: #1e293b; }
+.fix-diff-divider { border-left: 1px solid #cbd5e1; }
+.fix-diff-equal { background: white; }
+.fix-diff-changed { background: #eff6ff; }
+.fix-diff-removed { background: #fff1f2; }
+.fix-diff-added { background: #ecfdf5; }
+.fix-diff-missing { background: #f1f5f9; }
+.fix-diff-field { display: flex; min-height: 28px; }
+.fix-diff-group { font-weight: 600; }
+.fix-diff-gutter { display: flex; align-items: baseline; flex: 0 0 64px; gap: 3px; padding: 4px 6px; border-right: 1px solid #e2e8f0; font-size: 11px; color: #64748b; }
+.fix-diff-tag { flex: 1; text-align: right; }
+.fix-diff-marker { display: inline-block; min-width: 8px; text-align: center; font-weight: 700; }
+.fix-diff-line { flex: 1; min-width: 0; padding: 4px 12px; white-space: pre; }
+.fix-diff-wrap .fix-diff-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fix-diff-line .fix-value-button { display: inline; max-width: none; vertical-align: baseline; }
+.fix-diff-name { color: #475569; }
+.fix-diff-separator { color: #94a3b8; }
+.fix-diff-edit { border-radius: 2px; }
+.fix-diff-edit-changed { background: #fef08a; }
+.fix-diff-edit-removed { background: #fecdd3; }
+.fix-diff-edit-added { background: #a7f3d0; }
+.fix-diff-fold { padding: 0; border-block: 1px solid #e2e8f0; background: #f1f5f9; }
+.fix-diff-fold button { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; color: #475569; }
+.fix-diff-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 16px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; }
+.fix-diff-legend .fix-diff-edit { margin-right: 4px; padding: 0 4px; color: #1e293b; }
+.fix-diff button:focus-visible, .fix-diff-scroll:focus-visible { outline: 2px solid #3b82f6; outline-offset: -2px; }

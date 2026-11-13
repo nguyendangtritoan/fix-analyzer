@@ -500,6 +500,7 @@ const getGroupInstanceIdentity = (instance, fallbackIndex) => {
 export const flattenForDiff = (nodes, prefix = "", depth = 0) => {
   let flat = [];
   const keyCounts = {}; 
+  const parentKey = prefix ? `${prefix.slice(0, -1)}.$instance` : null;
 
   nodes.forEach((node) => {
     let key = `${prefix}${node.tag}`;
@@ -513,6 +514,7 @@ export const flattenForDiff = (nodes, prefix = "", depth = 0) => {
     if (node.isGroup) {
       flat.push({ 
         key: key, 
+        parentKey,
         tag: node.tag, 
         value: node.value, 
         depth, 
@@ -528,6 +530,7 @@ export const flattenForDiff = (nodes, prefix = "", depth = 0) => {
         const instancePrefix = `${key}[${instanceKey}]`;
         flat.push({
           key: `${instancePrefix}.$instance`,
+          parentKey: key,
           tag: identity.delimiter?.tag ?? node.tag,
           value: occurrence === 1 ? identity.value : `${identity.value} (occurrence ${occurrence})`,
           depth: depth + 1,
@@ -539,6 +542,7 @@ export const flattenForDiff = (nodes, prefix = "", depth = 0) => {
     } else {
       flat.push({ 
         key: key, 
+        parentKey,
         tag: node.tag, 
         value: node.value, 
         depth 

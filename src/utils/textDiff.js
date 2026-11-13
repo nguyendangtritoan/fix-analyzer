@@ -87,7 +87,7 @@ const appendSegment = (segments, text, changed) => {
   else segments.push({ text, changed });
 };
 
-const inlineDiff = (left, right) => {
+export const compareTextCharacters = (left, right) => {
   const leftSegments = [];
   const rightSegments = [];
   for (const edit of diffSequence(Array.from(left), Array.from(right))) {
@@ -159,7 +159,7 @@ export const compareText = (left, right) => {
     for (const [leftText, rightText] of alignReplacements(removed, added)) {
       const type = leftText === null ? 'added' : rightText === null ? 'removed' : 'changed';
       const [leftSegments, rightSegments] = type === 'changed'
-        ? inlineDiff(leftText, rightText)
+        ? compareTextCharacters(leftText, rightText)
         : [leftText === null ? [] : [{ text: leftText, changed: true }], rightText === null ? [] : [{ text: rightText, changed: true }]];
       rows.push({
         type, leftText, rightText, leftSegments, rightSegments,
